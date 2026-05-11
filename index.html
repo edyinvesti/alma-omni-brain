@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.L.M.A. Command Center</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="hud-container">
+        <!-- BACKGROUND GRID & SCANLINES -->
+        <div class="hud-scanlines"></div>
+        <div class="hud-grid"></div>
+
+        <!-- TOP BAR: STATUS -->
+        <header class="hud-header">
+            <div class="hud-left-meta">
+                <span class="hud-label">ALMA-MASTER-01</span>
+                <span class="hud-status-blink">UPCODE: CONNECTED</span>
+            </div>
+            <div class="hud-center-title">NEURAL INTERFACE [STARK-GEN-IV]</div>
+            <div id="datetime" class="hud-datetime">LOADING...</div>
+        </header>
+
+        <main class="hud-main">
+            <!-- LEFT WIDGETS -->
+            <div class="hud-side left">
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">LEAD METRICS / IAmobil</div>
+                    <div class="hud-metric-row">
+                        <span class="val">4.5M</span>
+                        <canvas id="tiktokChart" width="100" height="40"></canvas>
+                    </div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">SYSTEM LOAD</div>
+                    <div class="hud-metric-row">
+                        <span class="val style-cyan">98.6%</span>
+                        <div class="mini-bar"><div class="fill" style="width: 98%;"></div></div>
+                    </div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">NETWORK TRAFFIC</div>
+                    <div class="chart-container micro">
+                        <canvas id="revChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTRAL HOLOGRAPHIC CORE -->
+            <div class="hud-center">
+                <div class="hologram-rings">
+                    <div class="ring ring-outer"></div>
+                    <div class="ring ring-mid"></div>
+                    <div class="ring ring-inner"></div>
+                    <div class="alma-core-wrapper" onclick="toggleTerminal()">
+                        <div class="core-center-glow"></div>
+                        <div class="core-visual">
+                             <div class="orbit orbit-1"></div>
+                             <div class="orbit orbit-2"></div>
+                             <h1 class="core-text">ALMA</h1>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT WIDGETS -->
+            <div class="hud-side right">
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">FINANCIAL FLOW / Laed</div>
+                    <div id="barChart-container"><canvas id="barChart"></canvas></div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">NEURAL VELOCITY</div>
+                    <div class="hud-metric-row">
+                        <span class="val style-green">96%</span>
+                        <canvas id="sparkChart" width="100" height="40"></canvas>
+                    </div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">SOCIAL ENGAGEMENT</div>
+                    <div class="chart-container micro">
+                        <canvas id="instaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="hud-footer">
+            <div class="hud-hint">NEURAL UPLINK ACTIVE // [STARK-OS] READY</div>
+            <div class="hud-stats-row">
+                <span>MEM: 14.2GB</span>
+                <span>CPU: 32C</span>
+                <span>GPU: CORE-SYNC</span>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- INTERACTIVE COMMAND LAYER -->
+    <div id="terminal-overlay" class="terminal-overlay minimal hidden">
+        <div id="log-history" class="log-history glass-card hidden">
+            <div class="terminal-header">ALMA REGISTRO NEURAL 
+                <button onclick="toggleLogs()" style="float:right; background:transparent; border:none; color:var(--c1); cursor:pointer; font-size: 1.2em;">×</button>
+            </div>
+            <div id="log-scroll"></div>
+        </div>
+        
+        <div class="input-zone glass-card">
+            <button class="minimal-toggle" onclick="toggleLogs()" title="Ver Histórico de Logs">📜</button>
+            <input type="text" id="cmd-input" placeholder="Diretrizes..." onkeypress="handleInput(event)" oninput="updateActionBtn()">
+            <button id="input-action-btn" onclick="handleActionBtnClick()">
+                <span id="action-icon">🎙️</span>
+            </button>
+            <button class="close-terminal" onclick="toggleTerminal()" title="Fechar Central">×</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
