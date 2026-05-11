@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -95,15 +94,14 @@ const securityMiddleware = (req, res, next) => {
 
 app.use(express.static(__dirname)); // Serve os arquivos estáticos
 
-// --- CONFIGURAÇÃO DO BANCO DE DADOS (LOCAL OU NUVEM) ---
-let db_type = "local";
+// --- CONFIGURAÇÃO DO BANCO DE DADOS (TURSO CLOUD) ---
+let db_type = "cloud";
 let db = null;
 
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
 if (TURSO_URL && TURSO_TOKEN) {
-    // Configuração para Turso (Nuvem)
     db = createClient({
         url: TURSO_URL,
         authToken: TURSO_TOKEN
@@ -111,13 +109,9 @@ if (TURSO_URL && TURSO_TOKEN) {
     db_type = "cloud";
     console.log('[SISTEMA] Conectado ao banco Turso (Nuvem).');
 } else {
-    // Fallback para SQLite Local
-    const sqlite3 = require('sqlite3').verbose();
-    db = new sqlite3.Database('./telemetry.db', (err) => {
-        if (err) console.error('[ERRO] Falha ao abrir o banco local:', err);
-        else console.log('[SISTEMA] Banco SQLite Local Conectado.');
-    });
-    db_type = "local";
+    console.error('[ERRO FATAL] Variáveis TURSO_DATABASE_URL e TURSO_AUTH_TOKEN não configuradas!');
+    console.error('[SISTEMA] Configure as variáveis de ambiente no Render e o sistema vai rodar 100% Cloud.');
+    process.exit(1);
 }
 
 // --- HELPER UNIFICADO PARA CONSULTAS (LOCAL E NUVEM) ---
