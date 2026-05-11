@@ -11,14 +11,14 @@ const { exec } = require('child_process');
 const { createClient } = require('@libsql/client');
 
 // Chave Groq para Whisper e Chat
-const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.GROQ_KEY || "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";
+const GROQ_API_KEY = (process.env.GROQ_API_KEY || process.env.GROQ_KEY || "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").trim();
 
 // Detecta modo Nuvem
 const IS_CLOUD = process.env.CLOUD_MODE === 'true' || !!process.env.RENDER;
 
 // Inicializa o Bot do Telegram se o token existir
-const botToken = process.env.TELEGRAM_BOT_TOKEN;
-const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+const botToken = process.env.TELEGRAM_BOT_TOKEN ? process.env.TELEGRAM_BOT_TOKEN.trim() : undefined;
+const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID ? process.env.TELEGRAM_ADMIN_CHAT_ID.trim() : undefined;
 let bot = null;
 
 if (botToken && !botToken.includes("insira_seu_token")) {
@@ -71,7 +71,7 @@ app.use((req, res, next) => {
 });
 
 // --- MIDDLEWARE DE SEGURANÇA SENTINEL ---
-const API_SECRET = process.env.API_SECRET || "alma_secret_2026";
+const API_SECRET = (process.env.API_SECRET || "alma_secret_2026").trim();
 
 const securityMiddleware = (req, res, next) => {
     const incomingSecret = req.headers['x-alma-key'];
@@ -98,8 +98,8 @@ app.use(express.static(__dirname)); // Serve os arquivos estáticos
 let db_type = "cloud";
 let db = null;
 
-const TURSO_URL = process.env.TURSO_DATABASE_URL;
-const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
+const TURSO_URL = process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.trim() : undefined;
+const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN ? process.env.TURSO_AUTH_TOKEN.trim() : undefined;
 
 if (TURSO_URL && TURSO_TOKEN) {
     db = createClient({
