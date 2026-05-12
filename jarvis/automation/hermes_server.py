@@ -51,4 +51,4 @@ def open_path():
 
 if __name__ == '__main__':
     print("|| HERMES DAEMON INICIADO (PORTA 3001) ||")
-    app.run(host='127.0.0.1', port=3001, threaded=True)
+    app.run(host='0.0.0.0', port=3001, threaded=True)

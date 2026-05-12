@@ -84,7 +84,7 @@ function toggleLogs() {
 
 async function processCommand(text) {
     addLog(text, "COMANDANTE");
-    const resposta = await chamarGroq(text);
+    const resposta = await chamarBrainServer(text);
     
     // Parse de Ações (SAM)
     const actionMatch = resposta.match(/\[\[ACTION: (.*?)\]\]/);
@@ -301,55 +301,30 @@ function triggerVoice() {
     }
 }
 
-async function chamarGroq(pergunta) {
-    const URL = "https://api.groq.com/openai/v1/chat/completions";
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const timeStr = now.toLocaleTimeString('pt-BR');
+async function chamarBrainServer(pergunta) {
+    const URL = `${CORE_TELEMETRY_URL}/api/brain`;
     
-    const sysPrompt = `Você é a A.L.M.A. (Artificial Logic and Master Assistant). Seu tom é acolhedor, prestimoso, preciso e super-inteligente. Você sempre chama o usuário de '${userName}'. Suas respostas são curtas e diretas.
-    INFORMAÇÃO TEMPORAL: Hoje é ${dateStr}, e agora são ${timeStr}.
-    
-    REGRA ABSOLUTA - CAPACIDADE ACTANTE (SAM):
-    SEMPRE que o usuário pedir para "pesquisar", "buscar", "procurar" qualquer coisa na internet, você OBRIGATORIAMENTE deve incluir ao final da resposta o seguinte formato EXATO:
-    [[ACTION: {"action":"search","target":"TERMO DE BUSCA AQUI"}]]
-    
-    SEMPRE que o usuário pedir para "abrir" um programa, você OBRIGATORIAMENTE deve incluir:
-    [[ACTION: {"action":"open","target":"NOME DO PROGRAMA"}]]
-    
-    Exemplos de ações disponíveis:
-    - Pesquisa: [[ACTION: {"action":"search","target":"carros elétricos"}]]
-    - Abrir app: [[ACTION: {"action":"open","target":"chrome"}]]
-    - Info sistema: [[ACTION: {"action":"sys_info"}]]
-    
-    NUNCA deixe de incluir o [[ACTION:...]] quando o usuário pedir uma pesquisa ou para abrir algo. Isso é OBRIGATÓRIO.
-    Confirme verbalmente a ação que está executando antes do código de ação.`;
-
     try {
         const response = await fetch(URL, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${GROQ_KEY}`
+                'x-alma-key': 'alma_secret_2026'
             },
             body: JSON.stringify({
-                model: "llama-3.3-70b-versatile",
-                messages: [
-                    { role: "system", content: sysPrompt },
-                    { role: "user", content: pergunta }
-                ]
+                prompt: pergunta
             })
         });
         const json = await response.json();
-        if (json.choices && json.choices[0].message && json.choices[0].message.content) {
-            return json.choices[0].message.content;
+        if (json.success && json.response) {
+            return json.response;
         }
-        const err = "Erro neural interno ao processar idioma.";
+        const err = "Erro neural interno ao processar idioma no servidor.";
         speak(err);
         return err;
     } catch (e) {
         console.error(e);
-        const err = "Senhor, houve uma interferência no uplink com o servidor.";
+        const err = "Senhor, houve uma interferência no uplink com o servidor central.";
         speak(err);
         return err;
     }

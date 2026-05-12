@@ -121,6 +121,17 @@ class JarvisCore:
                         success = self.automation.open_path(target)
                         msg = f"Diretório {target} aberto." if success else f"Falha ao abrir {target}."
                         self.speaker.speak(msg)
+                elif action == "update_memory":
+                    key = data.get("key")
+                    value = data.get("value")
+                    if key and value:
+                        self.memory.save_memory(key, value)
+                        print(f"[JARVIS] Memória de estado atualizada: {key} = {value}")
+                elif action == "update_biography":
+                    fact = data.get("fact")
+                    if fact:
+                        self.memory.update_biography(fact)
+                        print(f"[JARVIS] Novo fato biográfico registrado: {fact}")
 
             except Exception as e:
                 print(f"[ERRO] Falha na execução da diretriz: {e}")

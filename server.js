@@ -128,10 +128,18 @@ async function dbExecute(sql, params = []) {
     }
 }
 
-// Inicializa a tabela logs em ambos os modos (Local e Nuvem)
-dbExecute('CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)')
-    .then(() => console.log('[SISTEMA] Tabela logs inicializada/verificada.'))
-    .catch(err => console.error('[ERRO] Tabela logs:', err));
+// Inicializa as tabelas do Omni-Brain em ambos os modos (Local e Nuvem)
+const initDB = async () => {
+    try {
+        await dbExecute('CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)');
+        await dbExecute('CREATE TABLE IF NOT EXISTS memory (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE, value TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)');
+        await dbExecute('CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)');
+        console.log('[SISTEMA] Tabelas do Omni-Brain inicializadas/verificadas.');
+    } catch (err) {
+        console.error('[ERRO DB] Falha na inicialização:', err);
+    }
+};
+initDB();
 
 
 async function dbGet(sql, params = []) {
@@ -183,20 +191,70 @@ app.post('/api/telemetry', securityMiddleware, async (req, res) => {
     }
 });
 
+// --- HELPER PARA RECUPERAR CONTEXTO OMNI ---
+async function getOmniContext() {
+    try {
+        const facts = await dbExecute('SELECT key, value FROM memory');
+        const history = await dbExecute('SELECT role, content FROM history ORDER BY id DESC LIMIT 5');
+        
+        let context = "=== MEMÓRIA E FATOS ===\n";
+        facts.rows.forEach(f => context += `${f.key}: ${f.value}\n`);
+        
+        context += "\n=== HISTÓRICO RECENTE ===\n";
+        history.rows.reverse().forEach(h => context += `${h.role}: ${h.content}\n`);
+        
+        return context;
+    } catch (err) {
+        console.error("[CONTEXTO] Erro ao carregar:", err);
+        return "";
+    }
+}
+
+// --- HELPER PARA PROCESSAR AÇÕES DE MEMÓRIA ---
+async function handleMemoryActions(response) {
+    const actionMatch = response.match(/\[\[ACTION: (.*?)\]\]/);
+    if (actionMatch) {
+        try {
+            const data = JSON.parse(actionMatch[1]);
+            const { action, key, value, fact } = data;
+            
+            if (action === "update_memory" && key && value) {
+                await dbExecute('INSERT OR REPLACE INTO memory (key, value) VALUES (?, ?)', [key, value]);
+                console.log(`[MEMÓRIA] Dado atualizado: ${key} = ${value}`);
+            } else if (action === "update_biography" && fact) {
+                await dbExecute('INSERT INTO logs (source, message) VALUES (?, ?)', ['ALMA_BIO', fact]);
+                // Também adicionamos ao banco de memórias estruturadas se for relevante
+                await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['JARVIS_LEARNING', `Fato aprendido: ${fact}`]);
+                console.log(`[MEMÓRIA] Biografia atualizada: ${fact}`);
+            }
+        } catch (e) {
+            console.error("[MEMÓRIA] Falha ao processar ação:", e.message);
+        }
+    }
+}
+
 // --- HELPER PARA PENSAMENTO AI (GROQ LLM) ---
 async function askJarvisBrain(prompt, context = "") {
-    const sys_prompt = "Você é o JARVIS. Um assistente de IA potente, leal e sarcástico, focado em ajudar o Comandante com automação, visão e controle de sistema. Responda de forma direta e inteligente.";
+    const sys_prompt = `Você é o JARVIS. Um assistente de IA potente e leal. 
+    
+    DIRETRIZES DE MEMÓRIA:
+    1. Se aprender algo novo sobre o usuário (nome, cargo, preferência), use: [[ACTION: {"action":"update_memory", "key":"...", "value":"..."}]]
+    2. Se o usuário contar um fato histórico/biográfico, use: [[ACTION: {"action":"update_biography", "fact":"..."}]]
+    
+    Aja como um biógrafo atento. Contexto atual: ${context}`;
+    
+    await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['Comandante', prompt]);
     
     const body = JSON.stringify({
         messages: [
             { role: "system", content: sys_prompt },
-            { role: "user", content: `${context}\n\nComando: ${prompt}` }
+            { role: "user", content: `Instrução: ${prompt}` }
         ],
         model: "llama-3.3-70b-versatile"
     });
 
     try {
-        return await new Promise((resolve, reject) => {
+        const response = await new Promise((resolve, reject) => {
             const options = {
                 hostname: 'api.groq.com',
                 path: '/openai/v1/chat/completions',
@@ -223,6 +281,12 @@ async function askJarvisBrain(prompt, context = "") {
             req.write(body);
             req.end();
         });
+
+        // Salva a resposta no histórico e processa ações
+        await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['JARVIS', response]);
+        await handleMemoryActions(response);
+        
+        return response;
     } catch (err) {
         console.error("[GROQ BRAIN] Erro:", err);
         return "Desculpe, Comandante. Meu córtex neural está processando com dificuldade agora.";
@@ -414,9 +478,10 @@ if (bot) {
                 });
             }
         } else {
-            // Se não for um comando direto, Jarvis pensa e responde
+            // Se não for um comando direto, Jarvis pensa e responde com o Contexto Omni
             bot.sendChatAction(msg.chat.id, 'typing').catch(e => console.error("Erro typing:", e));
-            const aiResponse = await askJarvisBrain(text);
+            const context = await getOmniContext();
+            const aiResponse = await askJarvisBrain(text, context);
             bot.sendMessage(msg.chat.id, aiResponse).catch(e => console.error("Erro brain response:", e));
         }
 
@@ -522,9 +587,10 @@ if (bot) {
                 });
             }
         } else {
-            // Resposta inteligente via AI
+            // Resposta inteligente via AI com o Contexto Omni
             bot.sendChatAction(chatId, 'typing').catch(e => console.error("Erro typing voz", e));
-            const aiResponse = await askJarvisBrain(text);
+            const context = await getOmniContext();
+            const aiResponse = await askJarvisBrain(text, context);
             bot.sendMessage(chatId, `🧠 *Brain Responde:* ${aiResponse}`).catch(e => console.error("Erro brain voz", e));
         }
     };
@@ -595,6 +661,21 @@ if (bot) {
 } else {
     console.log('[TELEGRAM] Aviso: Token não configurado no .env. Alertas desativados.');
 }
+
+// === BRAIN API - Centraliza o pensamento e memória para o Dashboard ===
+app.post('/api/brain', securityMiddleware, async (req, res) => {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Faltando prefixo de comando.' });
+
+    try {
+        const context = await getOmniContext();
+        const response = await askJarvisBrain(prompt, context);
+        res.json({ success: true, response });
+    } catch (err) {
+        console.error("[API BRAIN] Falha no processamento:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // === SYSTEM ACCESS MODULE (SAM) - Protegido ===
 app.post('/api/action', securityMiddleware, (req, res) => {
