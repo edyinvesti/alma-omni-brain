@@ -384,7 +384,8 @@ if (bot) {
             bot.sendMessage(msg.chat.id, `⚡ *Daemon Hermes:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
                 .catch(err => console.error("ERRO:", err.message));
             
-            fetch(`http://127.0.0.1:3001${hermesEndpoint}`, {
+            const hermesBaseUrl = process.env.HERMES_URL ? process.env.HERMES_URL.trim() : 'http://127.0.0.1:3001';
+            fetch(`${hermesBaseUrl}${hermesEndpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(hermesPayload)
@@ -493,7 +494,8 @@ if (bot) {
             bot.sendMessage(chatId, `⚡ *Daemon Hermes:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
                 .catch(err => console.error("ERRO CRITICO:", err.message));
             
-            fetch(`http://127.0.0.1:3001${hermesEndpoint}`, {
+            const hermesBaseUrl = process.env.HERMES_URL ? process.env.HERMES_URL.trim() : 'http://127.0.0.1:3001';
+            fetch(`${hermesBaseUrl}${hermesEndpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(hermesPayload)
