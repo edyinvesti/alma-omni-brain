@@ -1,9 +1,24 @@
 from flask import Flask, request, jsonify
 from pc_controller import HermesAgent
 import traceback
+import subprocess
 
 app = Flask(__name__)
 hermes = HermesAgent()
+
+@app.route('/api/hermes/exec', methods=['POST'])
+def exec_command():
+    """Executa um comando shell generico vindo da nuvem (pesquisa, abrir apps, etc.)"""
+    try:
+        data = request.json or {}
+        command = data.get('command', '').strip()
+        if not command:
+            return jsonify({"status": "error", "message": "Nenhum comando fornecido"}), 400
+        print(f"[HERMES EXEC] Executando: {command}")
+        subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return jsonify({"status": "success", "message": f"Comando executado: {command}"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e), "trace": traceback.format_exc()}), 500
 
 @app.route('/api/hermes/work_mode', methods=['POST'])
 def work_mode():

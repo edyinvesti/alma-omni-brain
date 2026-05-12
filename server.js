@@ -377,38 +377,42 @@ if (bot) {
             }
         }
 
-        if (hermesEndpoint) {
-            if (IS_CLOUD) {
-                return bot.sendMessage(msg.chat.id, `⚠️ O comando "${action}" bloqueado na nuvem.`, {parse_mode:'Markdown'});
-            }
-            bot.sendMessage(msg.chat.id, `⚡ *Daemon Hermes:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
+        const hermesBaseUrl = process.env.HERMES_URL ? process.env.HERMES_URL.trim() : 'http://127.0.0.1:3001';
+
+        const sendToHermes = (endpoint, payload, label) => {
+            bot.sendMessage(msg.chat.id, `⚡ *Daemon Hermes:* ${label}...`, {parse_mode:'Markdown'})
                 .catch(err => console.error("ERRO:", err.message));
-            
-            const hermesBaseUrl = process.env.HERMES_URL ? process.env.HERMES_URL.trim() : 'http://127.0.0.1:3001';
-            fetch(`${hermesBaseUrl}${hermesEndpoint}`, {
+            fetch(`${hermesBaseUrl}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(hermesPayload)
+                body: JSON.stringify(payload)
             }).then(r => r.json()).then(data => {
                 if (data.status === 'success') {
-                    bot.sendMessage(msg.chat.id, `✅ *Daemon:* Ação concluída instantaneamente.`, {parse_mode:'Markdown'}).catch(e => console.error(e));
+                    bot.sendMessage(msg.chat.id, `✅ *Daemon:* Ação concluída no seu PC!`, {parse_mode:'Markdown'}).catch(e => console.error(e));
                 } else {
-                    bot.sendMessage(msg.chat.id, `❌ Falha do Daemon: ${data.message}`).catch(e => console.error(e));
+                    bot.sendMessage(msg.chat.id, `❌ Falha do Daemon: ${data.message || 'Erro desconhecido'}`).catch(e => console.error(e));
                 }
-            }).catch(e => bot.sendMessage(msg.chat.id, `❌ Falha de rede com o Daemon: ${e.message}`).catch(err=>console.error(err)));
+            }).catch(e => bot.sendMessage(msg.chat.id, `❌ Hermes offline ou erro de rede: ${e.message}`).catch(err=>console.error(err)));
+        };
+
+        if (hermesEndpoint) {
+            sendToHermes(hermesEndpoint, hermesPayload, action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`);
         } else if (command) {
             if (IS_CLOUD) {
-                return bot.sendMessage(msg.chat.id, `⚠️ O comando "${action}" seria executado no servidor da nuvem, o que não tem efeito no seu PC local.`, {parse_mode:'Markdown'});
+                // Em modo cloud: roteia para o Daemon Hermes no PC local
+                sendToHermes('/api/hermes/exec', { command }, action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`);
+            } else {
+                // Modo local: executa diretamente
+                bot.sendMessage(msg.chat.id, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
+                    .catch(err => console.error("ERRO CRITICO TELEGRAM:", err.message));
+                exec(command, (error, stdout) => {
+                    if (error) {
+                        bot.sendMessage(msg.chat.id, `❌ Falha: ${error.message}`).catch(e => console.error("Erro feedback falha:", e));
+                    } else {
+                        bot.sendMessage(msg.chat.id, `✅ *Concluído!* Ação executada com sucesso no seu PC.`, {parse_mode:'Markdown'}).catch(e => console.error("Erro feedback sucesso:", e));
+                    }
+                });
             }
-            bot.sendMessage(msg.chat.id, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
-                .catch(err => console.error("ERRO CRITICO TELEGRAM:", err.message));
-            exec(command, (error, stdout) => {
-                if (error) {
-                    bot.sendMessage(msg.chat.id, `❌ Falha: ${error.message}`).catch(e => console.error("Erro feedback falha:", e));
-                } else {
-                    bot.sendMessage(msg.chat.id, `✅ *Concluído!* Ação executada com sucesso no seu PC.`, {parse_mode:'Markdown'}).catch(e => console.error("Erro feedback sucesso:", e));
-                }
-            });
         } else {
             // Se não for um comando direto, Jarvis pensa e responde
             bot.sendChatAction(msg.chat.id, 'typing').catch(e => console.error("Erro typing:", e));
@@ -486,36 +490,37 @@ if (bot) {
             }
         }
 
-        if (hermesEndpoint) {
-            if (IS_CLOUD) {
-                return bot.sendMessage(chatId, `⚠️ Comando bloqueado na nuvem.`, {parse_mode:'Markdown'})
-                    .catch(e => console.error("Erro cloud", e));
-            }
-            bot.sendMessage(chatId, `⚡ *Daemon Hermes:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
-                .catch(err => console.error("ERRO CRITICO:", err.message));
-            
-            const hermesBaseUrl = process.env.HERMES_URL ? process.env.HERMES_URL.trim() : 'http://127.0.0.1:3001';
-            fetch(`${hermesBaseUrl}${hermesEndpoint}`, {
+        const hermesBaseUrlVoz = process.env.HERMES_URL ? process.env.HERMES_URL.trim() : 'http://127.0.0.1:3001';
+
+        const sendToHermesVoz = (endpoint, payload, label) => {
+            bot.sendMessage(chatId, `⚡ *Daemon Hermes:* ${label}...`, {parse_mode:'Markdown'})
+                .catch(err => console.error("ERRO VOZ:", err.message));
+            fetch(`${hermesBaseUrlVoz}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(hermesPayload)
+                body: JSON.stringify(payload)
             }).then(r => r.json()).then(data => {
                 if (data.status === 'success') {
-                    bot.sendMessage(chatId, `✅ *Daemon:* Ação concluída instantaneamente.`, {parse_mode:'Markdown'}).catch(e => console.error(e));
+                    bot.sendMessage(chatId, `✅ *Daemon:* Ação concluída no seu PC!`, {parse_mode:'Markdown'}).catch(e => console.error(e));
                 } else {
-                    bot.sendMessage(chatId, `❌ Falha do Daemon: ${data.message}`).catch(e => console.error(e));
+                    bot.sendMessage(chatId, `❌ Falha do Daemon: ${data.message || 'Erro desconhecido'}`).catch(e => console.error(e));
                 }
-            }).catch(e => bot.sendMessage(chatId, `❌ Falha de rede com o Daemon: ${e.message}`).catch(err=>console.error(err)));
+            }).catch(e => bot.sendMessage(chatId, `❌ Hermes offline ou erro de rede: ${e.message}`).catch(err=>console.error(err)));
+        };
+
+        if (hermesEndpoint) {
+            sendToHermesVoz(hermesEndpoint, hermesPayload, action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`);
         } else if (command) {
             if (IS_CLOUD) {
-                return bot.sendMessage(chatId, `⚠️ Comando "${action}" bloqueado na nuvem.`, {parse_mode:'Markdown'})
-                    .catch(e => console.error("Erro cloud voz", e));
+                // Em modo cloud: roteia para o Daemon Hermes no PC local
+                sendToHermesVoz('/api/hermes/exec', { command }, action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`);
+            } else {
+                bot.sendMessage(chatId, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`} no seu PC!`, {parse_mode:'Markdown'})
+                    .catch(e => console.error("Erro feedback voz", e));
+                exec(command, (err) => {
+                    if (err) bot.sendMessage(chatId, `❌ Falha: ${err.message}`).catch(e => console.error("Erro falha exec", e));
+                });
             }
-            bot.sendMessage(chatId, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`} no seu PC!`, {parse_mode:'Markdown'})
-                .catch(e => console.error("Erro feedback voz", e));
-            exec(command, (err) => {
-                if (err) bot.sendMessage(chatId, `❌ Falha: ${err.message}`).catch(e => console.error("Erro falha exec", e));
-            });
         } else {
             // Resposta inteligente via AI
             bot.sendChatAction(chatId, 'typing').catch(e => console.error("Erro typing voz", e));
