@@ -1,4 +1,4 @@
-const CORE_TELEMETRY_URL = "http://localhost:3000";
+const CORE_TELEMETRY_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3000" : "";
 const GROQ_KEY = "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"; 
 let userName = localStorage.getItem('alma_user_name') || "Senhor";
 
