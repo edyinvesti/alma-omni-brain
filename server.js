@@ -254,9 +254,9 @@ if (bot) {
 
     bot.onText(/\/leads/, async (msg) => {
         try {
-            const row = await dbGet("SELECT COUNT(*) as total FROM logs WHERE source LIKE '%IAmobil%' OR message LIKE '%lead%'");
+            const row = await dbGet("SELECT COUNT(*) as total FROM logs WHERE message LIKE '%lead%'");
             const count = row ? (row.total || row[0]) : 0;
-            bot.sendMessage(msg.chat.id, `📈 *Relatório de Leads (IAmobil)*\nTotal processado: ${count}\nStatus: Ativas e Otimizadas.`, {parse_mode: 'Markdown'});
+            bot.sendMessage(msg.chat.id, `📈 *Relatório Global de Leads*\nTotal processado: ${count}\nStatus: Ativas e Otimizadas.`, {parse_mode: 'Markdown'});
         } catch (err) {
             bot.sendMessage(msg.chat.id, "❌ Erro ao consultar leads no banco neural.");
         }
