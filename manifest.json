@@ -1,0 +1,17 @@
+{
+  "name": "ALMA Core Command Center",
+  "short_name": "ALMA CORE",
+  "description": "Unified Nerve Center for A.L.M.A. Omni-Brain",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#02060f",
+  "theme_color": "#00e5ff",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2103/2103633.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

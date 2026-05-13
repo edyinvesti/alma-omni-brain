@@ -692,11 +692,13 @@ app.post('/api/brain', securityMiddleware, async (req, res) => {
         const context = await getOmniContext();
         let response = await askJarvisBrain(prompt, context);
         
-        // No Dashboard (API), enviamos o texto limpo, mas talvez o front precise das ações?
-        // O front já tem parser de ações baseado no texto. Então enviamos o texto COMPLETO 
-        // e o Dashboard (script.js) limpa ao exibir. 
-        // VOU GARANTIR QUE O SCRIPT.JS ESTÁ LIMPANDO CORRETAMENTE.
-        res.json({ success: true, response });
+        // Processa ações de memória no Dashboard também
+        await handleMemoryActions(response);
+        
+        // Filtro Robusto: Garante um campo 'clean' para interfaces menos inteligentes
+        const cleanText = response.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
+        
+        res.json({ success: true, response, cleanText });
     } catch (err) {
         console.error("[API BRAIN] Falha no processamento:", err);
         res.status(500).json({ error: err.message });

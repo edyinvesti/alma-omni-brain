@@ -9,7 +9,13 @@ window.onload = () => {
     initTelemetryStream();
     initVoiceCommand();
     setupInteractions();
-    speak("Sistemas centrais online e estabilizados, Senhor.");
+    
+    // Splash Screen Sequence
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.classList.add('fade-out');
+        speak("Conexão neural estabelecida. Bem-vindo, Comandante Edy.");
+    }, 3000);
 };
 
 function updateTime() {
