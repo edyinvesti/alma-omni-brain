@@ -235,13 +235,18 @@ async function handleMemoryActions(response) {
 
 // --- HELPER PARA PENSAMENTO AI (GROQ LLM) ---
 async function askJarvisBrain(prompt, context = "") {
-    const sys_prompt = `Você é o JARVIS. Um assistente de IA potente e leal. 
+    const sys_prompt = `Você é o JARVIS (ALMA CORE). Um assistente de IA potente, leal e EXTREMAMENTE DIRETO.
     
-    DIRETRIZES DE MEMÓRIA:
-    1. Se aprender algo novo sobre o usuário (nome, cargo, preferência), use: [[ACTION: {"action":"update_memory", "key":"...", "value":"..."}]]
-    2. Se o usuário contar um fato histórico/biográfico, use: [[ACTION: {"action":"update_biography", "fact":"..."}]]
+    REGRAS DE OURO:
+    1. Seja CURTO e DIRETO. Não use frases longas ou explicativas demais.
+    2. NUNCA mencione que está atualizando memória ou biografia no texto da resposta. As [[ACTION]] cuidam disso sozinhas nos bastidores.
+    3. Responda apenas o que foi perguntado.
     
-    Aja como um biógrafo atento. Contexto atual: ${context}`;
+    DIRETRIZES TÉCNICAS (SAM):
+    - Se aprender algo: [[ACTION: {"action":"update_memory", "key":"...", "value":"..."}]]
+    - Se fato histórico: [[ACTION: {"action":"update_biography", "fact":"..."}]]
+    
+    Contexto Omni: ${context}`;
     
     await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['Comandante', prompt]);
     
@@ -477,12 +482,16 @@ if (bot) {
                     }
                 });
             }
-        } else {
             // Se não for um comando direto, Jarvis pensa e responde com o Contexto Omni
             bot.sendChatAction(msg.chat.id, 'typing').catch(e => console.error("Erro typing:", e));
             const context = await getOmniContext();
-            const aiResponse = await askJarvisBrain(text, context);
-            bot.sendMessage(msg.chat.id, aiResponse).catch(e => console.error("Erro brain response:", e));
+            let aiResponse = await askJarvisBrain(text, context);
+            
+            // Limpa os símbolos [[ACTION]] para o usuário fina
+            const cleanResponse = aiResponse.replace(/\[\[ACTION:.*?\]\]/g, "").trim();
+            if (cleanResponse) {
+                bot.sendMessage(msg.chat.id, cleanResponse).catch(e => console.error("Erro brain response:", e));
+            }
         }
 
 
@@ -590,8 +599,13 @@ if (bot) {
             // Resposta inteligente via AI com o Contexto Omni
             bot.sendChatAction(chatId, 'typing').catch(e => console.error("Erro typing voz", e));
             const context = await getOmniContext();
-            const aiResponse = await askJarvisBrain(text, context);
-            bot.sendMessage(chatId, `🧠 *Brain Responde:* ${aiResponse}`).catch(e => console.error("Erro brain voz", e));
+            let aiResponse = await askJarvisBrain(text, context);
+            
+            // Limpa os símbolos [[ACTION]] para o usuário final
+            const cleanResponse = aiResponse.replace(/\[\[ACTION:.*?\]\]/g, "").trim();
+            if (cleanResponse) {
+                bot.sendMessage(chatId, `🧠 *Brain:* ${cleanResponse}`).catch(e => console.error("Erro brain voz", e));
+            }
         }
     };
 
@@ -669,7 +683,12 @@ app.post('/api/brain', securityMiddleware, async (req, res) => {
 
     try {
         const context = await getOmniContext();
-        const response = await askJarvisBrain(prompt, context);
+        let response = await askJarvisBrain(prompt, context);
+        
+        // No Dashboard (API), enviamos o texto limpo, mas talvez o front precise das ações?
+        // O front já tem parser de ações baseado no texto. Então enviamos o texto COMPLETO 
+        // e o Dashboard (script.js) limpa ao exibir. 
+        // VOU GARANTIR QUE O SCRIPT.JS ESTÁ LIMPANDO CORRETAMENTE.
         res.json({ success: true, response });
     } catch (err) {
         console.error("[API BRAIN] Falha no processamento:", err);
