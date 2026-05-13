@@ -488,6 +488,9 @@ if (bot) {
             const context = await getOmniContext();
             let aiResponse = await askJarvisBrain(text, context);
             
+            // Processa as ações nos bastidores antes de limpar o texto
+            await handleMemoryActions(aiResponse);
+            
             // Filtro Robusto: Limpa [[ACTION]] mesmo se tiverem múltiplas linhas
             const cleanResponse = aiResponse.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
             if (cleanResponse) {
