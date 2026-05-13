@@ -276,30 +276,49 @@ body {
 }
 
 @media (max-width: 600px) {
-    .hud-header { flex-direction: column; gap: 10px; text-align: center; }
-    .hud-datetime { order: -1; margin-bottom: 5px; }
-    .hud-center-title { font-size: 1.2em; }
+    .hud-header, .hud-footer, .hud-side { display: none !important; }
     
-    .hud-main { gap: 30px; }
-    .hud-widget { width: 100%; max-width: 100%; border-left: none; border-top: 4px solid var(--c1); }
-    .val { font-size: 1.4em; }
+    body { overflow: hidden; height: 100vh; }
+    .hud-container { height: 100vh; padding: 0; justify-content: center; }
+    
+    .hud-main { 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
 
-    .hologram-rings { width: 250px; height: 250px; }
-    .alma-core-wrapper { width: 120px; height: 120px; }
-    .core-visual { width: 80px; height: 80px; }
-    .core-text { font-size: 1em; }
+    .hologram-rings { 
+        width: 85vw; 
+        height: 85vw; 
+        max-width: 350px;
+        max-height: 350px;
+    }
     
-    .hud-footer { flex-direction: column; gap: 15px; text-align: center; padding-bottom: 30px; }
-    .hud-stats-row { flex-direction: column; gap: 5px; }
+    .alma-core-wrapper { 
+        width: 180px; 
+        height: 180px; 
+    }
     
+    .core-visual { width: 120px; height: 120px; }
+    .core-text { font-size: 1.4em; }
+
     .terminal-overlay { 
         bottom: 0; 
         left: 0; 
         transform: none; 
         width: 100%; 
-        border-radius: 20px 20px 0 0; 
+        border-radius: 25px 25px 0 0;
+        background: rgba(2, 6, 15, 0.95);
+        border: none;
+        border-top: 2px solid var(--c1);
     }
-    .log-history { height: 200px; }
-    #log-scroll { font-size: 0.75em; padding: 10px; }
-    .input-zone { padding: 5px 15px; }
+    
+    .log-history { height: 60vh; border: none; }
+    #log-scroll { font-size: 0.8em; padding: 20px; }
+    .input-zone { padding: 15px; background: rgba(0,0,0,0.5); }
+    #cmd-input { font-size: 1.1em; }
 }
