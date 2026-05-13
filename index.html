@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>A.L.M.A. Command Center</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -14,6 +14,9 @@
         <!-- BACKGROUND GRID & SCANLINES -->
         <div class="hud-scanlines"></div>
         <div class="hud-grid"></div>
+        
+        <!-- MOBILE FAST ACCESS -->
+        <div class="mobile-only-btn" onclick="toggleTerminal()">📟</div>
 
         <!-- TOP BAR: STATUS -->
         <header class="hud-header">

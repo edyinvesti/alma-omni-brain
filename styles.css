@@ -311,14 +311,41 @@ body {
         left: 0; 
         transform: none; 
         width: 100%; 
+        height: auto;
+        max-height: 100vh;
         border-radius: 25px 25px 0 0;
-        background: rgba(2, 6, 15, 0.95);
+        background: rgba(2, 6, 15, 0.98);
         border: none;
         border-top: 2px solid var(--c1);
+        display: flex;
+        flex-direction: column;
     }
     
-    .log-history { height: 60vh; border: none; }
+    .log-history { flex: 1; min-height: 40vh; border: none; }
     #log-scroll { font-size: 0.8em; padding: 20px; }
-    .input-zone { padding: 15px; background: rgba(0,0,0,0.5); }
-    #cmd-input { font-size: 1.1em; }
+    .input-zone { padding: 20px; background: rgba(0,0,0,0.8); padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+    #cmd-input { font-size: 1.1em; height: 50px; }
+}
+
+.mobile-only-btn {
+    display: none;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 229, 255, 0.1);
+    border: 2px solid var(--c1);
+    border-radius: 50%;
+    color: var(--c1);
+    font-size: 1.5em;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    box-shadow: 0 0 20px var(--c1);
+    cursor: pointer;
+}
+
+@media (max-width: 600px) {
+    .mobile-only-btn { display: flex; }
 }
