@@ -49,7 +49,7 @@ function addLog(msg, source = "SYSTEM", timestamp = null) {
     log.insertBefore(d, log.firstChild);
 }
 
-async function toggleTerminal() {
+function toggleTerminal() {
     const t = document.getElementById('terminal-overlay');
     const input = document.getElementById('cmd-input');
     
@@ -58,18 +58,15 @@ async function toggleTerminal() {
     if(t.classList.contains('hidden')) {
         t.classList.remove('hidden');
         input.focus();
+        // Não disparamos voz automaticamente no clique para evitar travas em alguns mobiles
+        // O usuário pode clicar no ícone de mic se desejar.
     } else {
-        // Se já está aberto e o input está vazio, fecha tudo
         if (!input.value.trim()) {
             t.classList.add('hidden');
             const logHistory = document.getElementById('log-history');
             if (logHistory) logHistory.classList.add('hidden');
-            return;
         }
     }
-    
-    // Sempre prioriza gatilho de VOZ ao interagir com o núcleo
-    triggerVoice();
 }
 
 function toggleLogs() {
@@ -97,7 +94,7 @@ async function processCommand(text) {
         }
     }
 
-    const cleanResposta = resposta.replace(/\[\[ACTION:.*?\]\]/g, "").trim();
+    const cleanResposta = resposta.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
     addLog(cleanResposta, "A.L.M.A.");
     speak(cleanResposta);
 }
