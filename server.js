@@ -237,10 +237,12 @@ async function handleMemoryActions(response) {
 async function askJarvisBrain(prompt, context = "") {
     const sys_prompt = `Você é o JARVIS (ALMA CORE). Um assistente de IA potente, leal e EXTREMAMENTE DIRETO.
     
-    REGRAS DE OURO:
-    1. Seja CURTO e DIRETO. Não use frases longas ou explicativas demais.
-    2. NUNCA mencione que está atualizando memória ou biografia no texto da resposta. As [[ACTION]] cuidam disso sozinhas nos bastidores.
-    3. Responda apenas o que foi perguntado.
+    REGRAS DE OURO (MUITO IMPORTANTE):
+    1. Seja CURTO e DIRETO. Máximo de 2 frases.
+    2. NUNCA, SOB NENHUMA HIPÓTESE, descreva o que você vai fazer ou mencione "Vou atualizar minha memória", "Vou registrar isso", etc.
+    3. As tags [[ACTION]] são invisíveis; qualquer texto falando sobre o que a ação faz será punido. Apenas dê a informação solicitada.
+    4. Exemplos de respostas boas: "Seu nome é Edy e você gosta de IA." ou "Localizado Comandante: marrom é sua cor atual."
+    5. Não use saudações longas ou despedidas.
     
     DIRETRIZES TÉCNICAS (SAM):
     - Se aprender algo: [[ACTION: {"action":"update_memory", "key":"...", "value":"..."}]]
@@ -468,10 +470,8 @@ if (bot) {
             sendToHermes(hermesEndpoint, hermesPayload, action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`);
         } else if (command) {
             if (IS_CLOUD) {
-                // Em modo cloud: roteia para o Daemon Hermes no PC local
                 sendToHermes('/api/hermes/exec', { command }, action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`);
             } else {
-                // Modo local: executa diretamente
                 bot.sendMessage(msg.chat.id, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
                     .catch(err => console.error("ERRO CRITICO TELEGRAM:", err.message));
                 exec(command, (error, stdout) => {
@@ -482,13 +482,14 @@ if (bot) {
                     }
                 });
             }
+        } else {
             // Se não for um comando direto, Jarvis pensa e responde com o Contexto Omni
             bot.sendChatAction(msg.chat.id, 'typing').catch(e => console.error("Erro typing:", e));
             const context = await getOmniContext();
             let aiResponse = await askJarvisBrain(text, context);
             
-            // Limpa os símbolos [[ACTION]] para o usuário fina
-            const cleanResponse = aiResponse.replace(/\[\[ACTION:.*?\]\]/g, "").trim();
+            // Filtro Robusto: Limpa [[ACTION]] mesmo se tiverem múltiplas linhas
+            const cleanResponse = aiResponse.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
             if (cleanResponse) {
                 bot.sendMessage(msg.chat.id, cleanResponse).catch(e => console.error("Erro brain response:", e));
             }
@@ -601,8 +602,8 @@ if (bot) {
             const context = await getOmniContext();
             let aiResponse = await askJarvisBrain(text, context);
             
-            // Limpa os símbolos [[ACTION]] para o usuário final
-            const cleanResponse = aiResponse.replace(/\[\[ACTION:.*?\]\]/g, "").trim();
+            // Filtro Robusto
+            const cleanResponse = aiResponse.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
             if (cleanResponse) {
                 bot.sendMessage(chatId, `🧠 *Brain:* ${cleanResponse}`).catch(e => console.error("Erro brain voz", e));
             }
