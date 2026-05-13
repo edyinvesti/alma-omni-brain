@@ -262,11 +262,44 @@ body {
 
 /* Responsive adjustments */
 @media (max-width: 1000px) {
+    body { overflow-y: auto; height: auto; }
+    .hud-container { height: auto; min-height: 100vh; }
     .hud-main {
         grid-template-columns: 1fr;
         padding-top: 50px;
+        gap: 50px;
     }
     .hud-side { flex-direction: row; flex-wrap: wrap; justify-content: center; }
     .hud-widget { width: 300px; }
     .hologram-rings { width: 300px; height: 300px; }
+    .terminal-overlay { width: 95%; bottom: 10px; }
+}
+
+@media (max-width: 600px) {
+    .hud-header { flex-direction: column; gap: 10px; text-align: center; }
+    .hud-datetime { order: -1; margin-bottom: 5px; }
+    .hud-center-title { font-size: 1.2em; }
+    
+    .hud-main { gap: 30px; }
+    .hud-widget { width: 100%; max-width: 100%; border-left: none; border-top: 4px solid var(--c1); }
+    .val { font-size: 1.4em; }
+
+    .hologram-rings { width: 250px; height: 250px; }
+    .alma-core-wrapper { width: 120px; height: 120px; }
+    .core-visual { width: 80px; height: 80px; }
+    .core-text { font-size: 1em; }
+    
+    .hud-footer { flex-direction: column; gap: 15px; text-align: center; padding-bottom: 30px; }
+    .hud-stats-row { flex-direction: column; gap: 5px; }
+    
+    .terminal-overlay { 
+        bottom: 0; 
+        left: 0; 
+        transform: none; 
+        width: 100%; 
+        border-radius: 20px 20px 0 0; 
+    }
+    .log-history { height: 200px; }
+    #log-scroll { font-size: 0.75em; padding: 10px; }
+    .input-zone { padding: 5px 15px; }
 }
