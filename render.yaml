@@ -23,3 +23,6 @@ services:
         sync: false
       - key: API_SECRET
         sync: false
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+      

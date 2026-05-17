@@ -1,0 +1,49 @@
+{
+  "facebook": [
+    {"name": "principal", "url": "https://www.facebook.com/edycarlos.dias.laureano"},
+    {"name": "conta 2", "url": "URL_AQUI"},
+    {"name": "conta 3", "url": "URL_AQUI"},
+    {"name": "conta 4", "url": "URL_AQUI"},
+    {"name": "conta 5", "url": "URL_AQUI"}
+  ],
+  "instagram": [
+    {"name": "edy_investi", "url": "https://www.instagram.com/edy_investi/"},
+    {"name": "conta 2", "url": "URL_AQUI"},
+    {"name": "conta 3", "url": "URL_AQUI"},
+    {"name": "conta 4", "url": "URL_AQUI"},
+    {"name": "conta 5", "url": "URL_AQUI"}
+  ],
+  "tiktok": [
+    {"name": "edycarlosdias", "url": "https://www.tiktok.com/@edycarlosdias?lang=pt-BR"},
+    {"name": "conta 2", "url": "URL_AQUI"},
+    {"name": "conta 3", "url": "URL_AQUI"},
+    {"name": "conta 4", "url": "URL_AQUI"},
+    {"name": "conta 5", "url": "URL_AQUI"}
+  ],
+  "linkedin": [
+    {"name": "edyinvesti", "url": "https://www.linkedin.com/in/edyinvesti/?locale=pt_BR"},
+    {"name": "conta 2", "url": "URL_AQUI"},
+    {"name": "conta 3", "url": "URL_AQUI"}
+  ],
+  "twitter": [
+    {"name": "edyinvesti", "url": "https://x.com/edyinvesti"},
+    {"name": "conta 2", "url": "URL_AQUI"}
+  ],
+  "gmail": [
+    {"name": "principal", "url": "https://mail.google.com/mail/u/0/"},
+    {"name": "trabalho", "url": "https://mail.google.com/mail/u/1/"},
+    {"name": "pessoal", "url": "https://mail.google.com/mail/u/2/"}
+  ],
+  "youtube": [
+    {"name": "edycarlosdias7160", "url": "https://www.youtube.com/@edycarlosdias7160"},
+    {"name": "principal", "url": "https://www.youtube.com/"}
+  ],
+  "whatsapp": [
+    {"name": "principal", "url": "https://web.whatsapp.com/"},
+    {"name": "business", "url": "https://web.whatsapp.com/"}
+  ],
+  "telegram": [
+    {"name": "principal", "url": "https://web.telegram.org/"},
+    {"name": "conta 2", "url": "URL_AQUI"}
+  ]
+}

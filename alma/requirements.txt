@@ -1,0 +1,13 @@
+flask
+flask-cors
+groq
+google-generativeai
+pyautogui
+playwright
+opencv-python
+mediapipe
+edge-tts
+SpeechRecognition
+pyaudio
+python-dotenv
+requests

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>A.L.M.A. Command Center</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#02060f">
+    <link rel="stylesheet" href="splashscreen/splashscreen.css">
+</head>
+<body>
+    <div class="hud-container">
+        <!-- MODULAR CINEMATIC INTRO -->
+        <div id="splash-container">
+            <div id="splash" title="Clique ou pressione qualquer tecla para pular">
+              <!-- Background effects -->
+              <div id="grid"></div>
+              <div id="scanline"></div>
+              <div id="particles"></div>
+              <div id="vignette"></div>
+              <!-- Corner decorations -->
+              <div class="corner-dec tl"></div>
+              <div class="corner-dec tr"></div>
+              <div class="corner-dec bl"></div>
+              <div class="corner-dec br"></div>
+              <!-- Main content -->
+              <div id="splash-content">
+                <svg id="logo-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                  <polygon id="hex-glow" points="100,18 172,58 172,142 100,182 28,142 28,58"/>
+                  <polygon id="hex" points="100,18 172,58 172,142 100,182 28,142 28,58"/>
+                  <circle id="circle" cx="100" cy="100" r="45"/>
+                  <g>
+                    <line class="conn-line" x1="100" y1="55"  x2="100" y2="18"/>
+                    <line class="conn-line" x1="139" y1="77"  x2="172" y2="58"/>
+                    <line class="conn-line" x1="139" y1="123" x2="172" y2="142"/>
+                    <line class="conn-line" x1="100" y1="145" x2="100" y2="182"/>
+                    <line class="conn-line" x1="61"  y1="123" x2="28"  y2="142"/>
+                    <line class="conn-line" x1="61"  y1="77"  x2="28"  y2="58"/>
+                  </g>
+                  <g>
+                    <line class="corner" x1="96"  y1="18"  x2="104" y2="18"/>
+                    <line class="corner" x1="96"  y1="182" x2="104" y2="182"/>
+                  </g>
+                  <path id="letter-a" d="M100 68 L80 132 M100 68 L120 132 M86 108 L114 108"/>
+                </svg>
+                <div id="title" class="glitch">A.L.M.A.</div>
+                <div id="subtitle">Advanced Learning &amp; Management Algorithm</div>
+                <div id="tagline">// Iniciando interface neural — 2026</div>
+                <div id="waves">
+                  <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                  <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                </div>
+                <div id="progress-wrap"><div id="progress-bar"></div></div>
+              </div>
+              <div id="skip-hint">[ CLIQUE OU QUALQUER TECLA PARA PULAR ]</div>
+            </div>
+        </div>
+
+        <!-- BACKGROUND GRID & SCANLINES -->
+        <div class="hud-scanlines"></div>
+        <div class="hud-grid"></div>
+        
+        <!-- MOBILE FAST ACCESS -->
+        <div class="mobile-only-btn" onclick="toggleTerminal()">📟</div>
+
+        <!-- TOP BAR: STATUS -->
+        <header class="hud-header">
+            <div class="hud-left-meta">
+                <span class="hud-label">ALMA-MASTER-01</span>
+                <span id="connection-status" class="hud-status-blink">UPCODE: CONNECTED</span>
+            </div>
+            <div class="hud-center-title">NEURAL INTERFACE [STARK-GEN-IV]</div>
+            <div id="datetime" class="hud-datetime">LOADING...</div>
+        </header>
+
+        <main class="hud-main">
+            <!-- LEFT WIDGETS -->
+            <div class="hud-side left">
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">LEAD METRICS / ALMA CORE</div>
+                    <div class="hud-metric-row">
+                        <span class="val">4.5M</span>
+                        <canvas id="tiktokChart" width="100" height="40"></canvas>
+                    </div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">SYSTEM LOAD</div>
+                    <div class="hud-metric-row">
+                        <span id="system-load-val" class="val style-cyan">--</span>
+                        <div class="mini-bar"><div id="system-load-bar" class="fill" style="width: 0%;"></div></div>
+                    </div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">NETWORK TRAFFIC</div>
+                    <div class="chart-container micro">
+                        <canvas id="revChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTRAL HOLOGRAPHIC CORE -->
+            <div class="hud-center">
+                <div class="hologram-rings">
+                    <div class="ring ring-outer"></div>
+                    <div class="ring ring-mid"></div>
+                    <div class="ring ring-inner"></div>
+                    <div class="alma-core-wrapper" onclick="toggleTerminal()">
+                        <div class="core-center-glow"></div>
+                        <div class="core-visual">
+                             <div class="orbit orbit-1"></div>
+                             <div class="orbit orbit-2"></div>
+                             <h1 class="core-text">ALMA</h1>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT WIDGETS -->
+            <div class="hud-side right">
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">FINANCIAL FLOW / Laed</div>
+                    <div id="barChart-container"><canvas id="barChart"></canvas></div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">NEURAL VELOCITY</div>
+                    <div class="hud-metric-row">
+                        <span class="val style-green">96%</span>
+                        <canvas id="sparkChart" width="100" height="40"></canvas>
+                    </div>
+                </div>
+                <div class="hud-widget glass-card">
+                    <div class="hud-widget-header">SOCIAL ENGAGEMENT</div>
+                    <div class="chart-container micro">
+                        <canvas id="instaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="hud-footer">
+            <div class="hud-hint">NEURAL UPLINK ACTIVE // [STARK-OS] READY</div>
+            <div class="hud-stats-row">
+                <span id="stat-mem">MEM: --</span>
+                <span id="stat-cpu">CPU: --</span>
+                <span id="stat-uptime">UP: --</span>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- INTERACTIVE COMMAND LAYER -->
+    <div id="terminal-overlay" class="terminal-overlay minimal hidden">
+        <div id="log-history" class="log-history glass-card hidden">
+            <div class="terminal-header">ALMA REGISTRO NEURAL 
+                <button onclick="toggleLogs()" style="float:right; background:transparent; border:none; color:var(--c1); cursor:pointer; font-size: 1.2em;">×</button>
+            </div>
+            <div id="log-scroll"></div>
+        </div>
+        
+        <div class="input-zone glass-card">
+            <button class="minimal-toggle" onclick="toggleLogs()" title="Ver Histórico de Logs">📜</button>
+            <input type="text" id="cmd-input" placeholder="Diretrizes..." onkeypress="handleInput(event)" oninput="updateActionBtn()">
+            <button id="input-action-btn" onclick="handleActionBtnClick()">
+                <span id="action-icon">🎙️</span>
+            </button>
+            <button class="close-terminal" onclick="toggleTerminal()" title="Fechar Central">×</button>
+        </div>
+    </div>
+
+    <script src="splashscreen/splashscreen.js"></script>
+    <script src="script.js?v=20260513"></script>
+</body>
+</html>

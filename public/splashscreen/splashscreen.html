@@ -1,0 +1,68 @@
+<div id="splash" title="Clique ou pressione qualquer tecla para pular">
+  <!-- Background effects -->
+  <div id="grid"></div>
+  <div id="scanline"></div>
+  <div id="particles"></div>
+  <div id="vignette"></div>
+
+  <!-- Corner decorations -->
+  <div class="corner-dec tl"></div>
+  <div class="corner-dec tr"></div>
+  <div class="corner-dec bl"></div>
+  <div class="corner-dec br"></div>
+
+  <!-- Main content -->
+  <div id="splash-content">
+    <!-- Animated SVG Logo -->
+    <svg id="logo-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <!-- Glow hex (behind) -->
+      <polygon id="hex-glow" points="100,18 172,58 172,142 100,182 28,142 28,58"/>
+      <!-- Main hexagon -->
+      <polygon id="hex" points="100,18 172,58 172,142 100,182 28,142 28,58"/>
+      <!-- Inner circle -->
+      <circle id="circle" cx="100" cy="100" r="45"/>
+      <!-- Connection lines (6 radial) -->
+      <g>
+        <line class="conn-line" x1="100" y1="55"  x2="100" y2="18"/>
+        <line class="conn-line" x1="139" y1="77"  x2="172" y2="58"/>
+        <line class="conn-line" x1="139" y1="123" x2="172" y2="142"/>
+        <line class="conn-line" x1="100" y1="145" x2="100" y2="182"/>
+        <line class="conn-line" x1="61"  y1="123" x2="28"  y2="142"/>
+        <line class="conn-line" x1="61"  y1="77"  x2="28"  y2="58"/>
+      </g>
+      <!-- Corner ticks on hex -->
+      <g>
+        <line class="corner" x1="96"  y1="18"  x2="104" y2="18"/>
+        <line class="corner" x1="96"  y1="182" x2="104" y2="182"/>
+      </g>
+      <!-- Letter A -->
+      <path id="letter-a" d="M100 68 L80 132 M100 68 L120 132 M86 108 L114 108"/>
+    </svg>
+
+    <!-- Title -->
+    <div id="title" class="glitch">A.L.M.A.</div>
+    <!-- Subtitle -->
+    <div id="subtitle">Advanced Learning &amp; Management Algorithm</div>
+    <!-- Tagline -->
+    <div id="tagline">// Iniciando interface neural — 2026</div>
+
+    <!-- Sound waves -->
+    <div id="waves">
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+
+    <!-- Progress bar -->
+    <div id="progress-wrap">
+      <div id="progress-bar"></div>
+    </div>
+  </div>
+  <!-- Skip hint -->
+  <div id="skip-hint">[ CLIQUE OU QUALQUER TECLA PARA PULAR ]</div>
+</div>
