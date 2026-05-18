@@ -10,6 +10,7 @@ from voice.speaker import AlmaSpeaker
 from voice.listener import AlmaListener
 from automation.pc_controller import HermesAgent
 from memory.memory_manager import AlmaMemory
+from memory.obsidian_manager import ObsidianVault
 from web_agent.agent import AthenaAgent
 from vision.detector import AlmaVision
 
@@ -59,6 +60,7 @@ class AlmaCore:
                 self.vision = None
         
         self.web_agent = AthenaAgent()
+        self.obsidian = ObsidianVault()
         self.running = True
 
     def run(self):
@@ -163,6 +165,14 @@ class AlmaCore:
                     if fact:
                         self.memory.update_biography(fact)
                         print(f"[ALMA] Novo fato biográfico registrado: {fact}")
+                elif action == "save_obsidian":
+                    title = data.get("title", "Nota_ALMA")
+                    content = data.get("content", "")
+                    tags = data.get("tags", ["alma-generated"])
+                    path = self.obsidian.write_note(title, content, tags)
+                    print(f"[OBSIDIAN] ✅ Nota '{title}' criada em: {path}")
+                    if self.speaker:
+                        self.speaker.speak(f"Nota '{title}' criada no Obsidian com sucesso, Comandante.")
 
             except Exception as e:
                 print(f"[ERRO] Falha na execução da diretriz: {e}")
@@ -172,7 +182,7 @@ class AlmaCore:
         try:
             import requests
             url = "http://localhost:3000/api/telegram/send-photo"
-            headers = {"x-alma-key": os.environ.get("API_SECRET", "alma_secret_2026")}
+            headers = {"x-alma-key": os.environ.get("API_SECRET")} if os.environ.get("API_SECRET") else {}
             payload = {"path": os.path.abspath(file_path), "caption": "📸 Screenshot solicitado via Comando de Voz/Texto."}
             r = requests.post(url, json=payload, headers=headers)
             if r.status_code == 200:

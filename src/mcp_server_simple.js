@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config();
 const os = require('os');
 const https = require('https');
 const { exec, execSync } = require('child_process');
@@ -6,8 +7,28 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const TELEGRAM_TOKEN = '8518348277:AAE3ltxflQO7yYpapB_yGF25HfnTEaxpaXo';
-const TELEGRAM_CHAT = '6202370881';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT = process.env.TELEGRAM_ADMIN_CHAT_ID;
+
+if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT) {
+    console.error('[MCP] ERRO: TELEGRAM_BOT_TOKEN e TELEGRAM_ADMIN_CHAT_ID devem estar no .env');
+    process.exit(1);
+}
+
+const ALLOWED_APPS = ['chrome', 'firefox', 'spotify', 'code', 'notepad', 'whatsapp', 'discord', 'teams', 'zoom', 'slack', 'brave'];
+
+function safeCalc(expr) {
+    const allowed = expr.replace(/[^0-9+\-*/().%\s]/g, '');
+    try {
+        const r = Function('"use strict"; return (' + allowed + ')')();
+        return isFinite(r) ? r : 'Erro';
+    } catch { return 'Erro'; }
+}
+
+function safeExec(cmd) {
+    if (!/^[a-zA-Z0-9 _.-]+$/.test(cmd)) throw new Error('Comando inválido');
+    return execSync(cmd, { encoding: 'utf8', timeout: 5000, shell: 'cmd' }).toString().substring(0, 500);
+}
 
 async function sendTelegram(msg) {
     const body = JSON.stringify({ chat_id: TELEGRAM_CHAT, text: msg });
@@ -307,11 +328,17 @@ async function handleRequest(msg) {
                 case 'add_knowledge': knowledgeDB.push({ title: args.title, content: args.content, created: new Date().toISOString() }); result = `✅ Conhecimento adicionado: "${args.title}" (${knowledgeDB.length} itens)`; break;
                 case 'search_knowledge': const matches = knowledgeDB.filter(k => k.title.toLowerCase().includes(args.query.toLowerCase()) || k.content.toLowerCase().includes(args.query.toLowerCase())); result = matches.length > 0 ? JSON.stringify(matches) : 'Nenhum resultado'; break;
                 case 'take_screenshot': result = `📸 Screenshot: ${Date.now()}.png`; break;
-                case 'open_app': try { execSync(`start ${args.app}`, { shell: 'cmd' }); result = `✅ App aberto: ${args.app}`; } catch (e) { result = `App: ${args.app}`; } break;
-                case 'execute_command': try { result = `✅ ${execSync(args.command, { encoding: 'utf8', timeout: 5000 }).substring(0, 500)}`; } catch (e) { result = `❌ ${e.message}`; } break;
+                case 'open_app':
+    if (!ALLOWED_APPS.includes(args.app.toLowerCase())) {
+        result = `❌ App não permitido: ${args.app}`;
+    } else {
+        try { execSync(`start ${args.app}`, { shell: 'cmd' }); result = `✅ App aberto: ${args.app}`; } catch (e) { result = `❌ ${e.message}`; }
+    }
+    break;
+case 'execute_command': try { result = `✅ ${safeExec(args.command)}`; } catch (e) { result = `❌ ${e.message}`; } break;
                 case 'get_weather': const cityMap = { 'sp': '22°C ☀️', 'são paulo': '22°C ☀️', 'rio': '24°C ⛅', 'brasilia': '25°C ☀️', 'bh': '23°C', 'salvador': '28°C', 'recife': '29°C', 'curitiba': '20°C' }; const cityNorm = args.city.toLowerCase().replace(/ã/g,'a').replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u'); result = cityMap[cityNorm] ? `🌤️ ${args.city}: ${cityMap[cityNorm]}` : `Cidade não encontrada`; break;
                 case 'send_email': result = `📧 Email simulado para ${args.to}\nAssunto: ${args.subject}`; break;
-                case 'calculator': try { result = `${args.expression} = ${eval(args.expression)}`; } catch (e) { result = `Erro: ${e.message}`; } break;
+                case 'calculator': try { result = `${args.expression} = ${safeCalc(args.expression)}`; } catch (e) { result = `Erro: ${e.message}`; } break;
                 case 'convert_currency': const rates = { USD: 1, BRL: 5.0, EUR: 0.85, GBP: 0.73 }; const conv = (args.amount / rates[args.from]) * rates[args.to]; result = `${args.amount} ${args.from} = ${conv.toFixed(2)} ${args.to}`; break;
                 case 'text_uppercase': result = args.text.toUpperCase(); break;
                 case 'text_lowercase': result = args.text.toLowerCase(); break;
@@ -513,6 +540,6 @@ process.stdin.on('data', async (chunk) => {
             const msg = JSON.parse(line);
             const response = await handleRequest(msg);
             if (response) console.log(JSON.stringify(response));
-        } catch (e) {}
+        } catch (e) { console.error("[MCP] Erro:", e.message); }
     }
 });

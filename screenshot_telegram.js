@@ -1,9 +1,15 @@
 const fs = require('fs');
 const https = require('https');
 const { execSync } = require('child_process');
+require('dotenv').config();
 
-const TELEGRAM_TOKEN = '8518348277:AAE3ltxflQO7yYpapB_yGF25HfnTEaxpaXo';
-const TELEGRAM_CHAT = '6202370881';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT = process.env.TELEGRAM_CHAT_ID;
+
+if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT) {
+    console.error('[SCREENSHOT] ERRO: TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID devem estar no .env');
+    process.exit(1);
+}
 const screenshotPath = 'C:\\Users\\User\\Downloads\\jarvis.html\\screenshot.png';
 
 console.log('📸 Capturando screenshot...');

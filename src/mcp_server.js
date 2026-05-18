@@ -237,7 +237,10 @@ class AlmaMCPServer {
         const http = require('http');
 
         const hermesUrl = process.env.HERMES_URL || 'http://localhost:3001';
-        const hermesKey = process.env.HERMES_API_KEY || 'alma_secure_key_2024';
+        const hermesKey = process.env.HERMES_API_KEY;
+        if (!hermesKey) {
+            return { content: [{ type: 'text', text: 'HERMES_API_KEY não configurada' }], isError: true };
+        }
 
         let endpoint = '';
         let payload = {};

@@ -1,5 +1,8 @@
 const CORE_TELEMETRY_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3000" : "";
-const API_SECRET = localStorage.getItem('alma_secret') || "alma_secret_2026";
+const API_SECRET = localStorage.getItem('alma_secret');
+        if (!API_SECRET) {
+            console.warn('[ALMA] API key não configurada. Gere uma chave em Settings.');
+        }
 let userName = localStorage.getItem('alma_user_name') || "Senhor";
 
 window.onload = () => {
@@ -107,7 +110,9 @@ function addLog(msg, source = "SYSTEM", timestamp = null) {
     const d = document.createElement('div');
     d.className = 'log-entry';
     const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR');
-    d.innerHTML = `<span class="log-time">[${timeStr}]</span><span class="log-source">[${source}]</span> <span style="color:#fff;">${msg}</span>`;
+    
+    const esc = (t) => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    d.textContent = `[${timeStr}][${esc(source)}] ${esc(msg)}`;
     log.insertBefore(d, log.firstChild);
 }
 
@@ -256,8 +261,9 @@ function setupInteractions() {
 // Reconhecimento de Voz (Microfone)
 let recognition;
 function initVoiceCommand() {
-    if ('webkitSpeechRecognition' in window) {
-        recognition = new webkitSpeechRecognition();
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SR();
         recognition.lang = 'pt-BR';
         recognition.continuous = false;
         recognition.interimResults = false;
@@ -366,7 +372,7 @@ function triggerVoice() {
                 try {
                     recognition.start();
                     micActive = true;
-                } catch(e2) {}
+                } catch(e2) { console.warn('[ALMA] Mic reinit failed:', e2.message); }
             }
         }, 100);
     }
@@ -404,7 +410,14 @@ async function chamarBrainServer(pergunta) {
             return err;
         }
         
-        const json = JSON.parse(text);
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (parseErr) {
+            const err = "Resposta inválida do servidor.";
+            speak(err);
+            return err;
+        }
         if (json.success && json.response) {
             return json.response;
         }
@@ -420,6 +433,21 @@ async function chamarBrainServer(pergunta) {
         speak(err);
         return err;
     }
+}
+
+function parseColorToRgba(color, alpha = 0.3) {
+    if (typeof color !== 'string') return 'rgba(0,255,157,0.3)';
+    if (color.startsWith('#')) {
+        const r = parseInt(color.slice(1,3), 16);
+        const g = parseInt(color.slice(3,5), 16);
+        const b = parseInt(color.slice(5,7), 16);
+        return `rgba(${r},${g},${b},${alpha})`;
+    }
+    if (color.startsWith('rgb')) {
+        return color.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+    }
+    return `rgba(0,255,157,${alpha})`;
+}
 }
 
 function speak(text, shouldRestart = true) {
@@ -463,7 +491,7 @@ function initCharts() {
         
         const lineCol = multiColors ? gradient : color;
         const bgGrad = ctx.getContext('2d').createLinearGradient(0, 0, 0, 60);
-        bgGrad.addColorStop(0, typeof lineCol === 'string' ? lineCol.replace('rgb', 'rgba').replace(')', ', 0.3)') : 'rgba(0,255,157,0.3)');
+        bgGrad.addColorStop(0, parseColorToRgba(lineCol, 0.3));
         bgGrad.addColorStop(1, 'transparent');
 
         new Chart(ctx, {

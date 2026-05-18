@@ -44,7 +44,7 @@ async function searchKnowledge(query, topK = 5) {
             let embedding = null;
             try {
                 embedding = JSON.parse(row.embedding || '[]');
-            } catch (e) {}
+            } catch (e) { console.warn('[VECTOR] Erro parsing embedding:', e.message); }
             
             if (!embedding || embedding.length === 0) {
                 return { ...row, score: 0 };

@@ -4,17 +4,19 @@
     "type": "split",
     "children": [
       {
-        "id": "9dc33527b281a0ca",
+        "id": "bd8949b3fa63a43c",
         "type": "tabs",
         "children": [
           {
-            "id": "6ef83ec1a151ab19",
+            "id": "e0a32649cceacba8",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Visualização em gráfico"
+              "type": "image",
+              "state": {
+                "file": "public/alma_omni_brain_concept_1778379422344.png"
+              },
+              "icon": "lucide-image",
+              "title": "alma_omni_brain_concept_1778379422344"
             }
           }
         ]
@@ -176,9 +178,29 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "6ef83ec1a151ab19",
+  "active": "e0a32649cceacba8",
   "lastOpenFiles": [
+    "check_db.cjs",
+    "alma/jarvis_speech.mp3",
+    "node_modules/jose/README.md",
+    "Sem título 3.canvas",
+    "Sem título 2.canvas",
+    "Sem título 1.canvas",
+    "Sem título 1.base",
+    "Sem título.canvas",
+    "Sem título.base",
     "Manual_Ecocistema.md",
+    "print.png",
+    "src/tmp_audio_1778934941492.ogg",
+    "node_modules/@grammyjs/types/README.md",
+    "ALMA Notes/Teste_Obsidian.md",
+    "ALMA Notes/Roadmap_ALMA.md",
+    "ALMA Notes/Diario_Progresso_2026-05-17.md",
+    "ALMA Notes/Arquitetura_do_Sistema_ALMA.md",
+    "2026-05-17.md",
+    "test_search.js",
+    "generate_embeddings.js",
+    "check_index.js",
     "node_modules/negotiator/README.md",
     "src/tmp_audio_1778860594833.ogg",
     "src/tmp_audio_1778860577781.ogg"

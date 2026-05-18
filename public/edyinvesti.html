@@ -502,15 +502,15 @@
             
             <nav class="nav-section">
                 <div class="nav-title">Principal</div>
-                <div class="nav-item active" onclick="showSection('dashboard')">
+                <div class="nav-item active" onclick="showSection('dashboard', event)">
                     <span class="nav-icon">◈</span>
                     Dashboard
                 </div>
-                <div class="nav-item" onclick="showSection('automacao')">
+                <div class="nav-item" onclick="showSection('automacao', event)">
                     <span class="nav-icon">⚡</span>
                     Automação
                 </div>
-                <div class="nav-item" onclick="showSection('estatisticas')">
+                <div class="nav-item" onclick="showSection('estatisticas', event)">
                     <span class="nav-icon">📊</span>
                     Estatísticas
                 </div>
@@ -537,11 +537,11 @@
             </nav>
             
             <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-color);">
-                <div class="nav-item" onclick="showSection('config')">
+                <div class="nav-item" onclick="showSection('config', event)">
                     <span class="nav-icon">⚙️</span>
                     Configurações
                 </div>
-                <div class="nav-item" onclick="showSection('ajuda')">
+                <div class="nav-item" onclick="showSection('ajuda', event)">
                     <span class="nav-icon">❓</span>
                     Ajuda
                 </div>
@@ -715,11 +715,17 @@
     
     <script>
         const HERMES_URL = 'http://127.0.0.1:3001';
+        const API_KEY = localStorage.getItem('alma_secret');
+        if (!API_KEY) {
+            console.warn('[EDY] API key não configurada. Gere uma em Settings.');
+        }
         let startTime = Date.now();
         
-        function showSection(section) {
+        function showSection(section, evt) {
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            event.target.closest('.nav-item').classList.add('active');
+            if (evt && evt.target) {
+                evt.target.closest('.nav-item').classList.add('active');
+            }
             
             const sections = {
                 'dashboard': 'Painel de Comando',
@@ -736,18 +742,26 @@
         async function checkSystemStatus(system) {
             const statusEl = document.getElementById(`${system}-status`);
             addLog(`Verificando status do ${system}...`, 'info');
+const secret = localStorage.getItem('alma_secret');
+            if (!secret) {
+                statusEl.className = 'status-indicator offline';
+                addLog(`${system.toUpperCase()}: API key não configurada`, 'error');
+                return;
+            }
             
             try {
                 if (system === 'jarvis') {
-                    await fetch('/health');
+                    const res = await fetch('/health');
+                    if (!res.ok) throw new Error('offline');
                 } else if (system === 'hermes') {
-                    await fetch(`${HERMES_URL}/api/hermes/status`);
+                    const res = await fetch(`${HERMES_URL}/api/hermes/status`);
+                    if (!res.ok) throw new Error('offline');
                 } else if (system === 'telegram') {
-                    const res = await fetch('/api/chat', { headers: { 'x-alma-key': 'alma_secret_2026' } });
-                    if (res.ok) throw new Error('test');
+                    const res = await fetch('/api/chat', { headers: { 'x-alma-key': secret } });
+                    if (!res.ok) throw new Error('offline');
                 } else if (system === 'sam') {
-                    const res = await fetch('/api/memory', { headers: { 'x-alma-key': 'alma_secret_2026' } });
-                    if (res.ok) throw new Error('test');
+                    const res = await fetch('/api/memory', { headers: { 'x-alma-key': secret } });
+                    if (!res.ok) throw new Error('offline');
                 }
                 
                 statusEl.className = 'status-indicator online';
@@ -787,7 +801,7 @@
         function addCommand(cmd, result) {
             const history = document.getElementById('command-history');
             const time = new Date().toLocaleTimeString('pt-BR');
-            const success = result.toLowerCase().includes('success');
+            const success = typeof result === 'string' && result.toLowerCase().includes('success');
             
             if (history.querySelector('.empty-state')) {
                 history.innerHTML = '';
@@ -828,14 +842,15 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': 'Bearer alma_secure_key_2024'
+'x-alma-key': API_KEY
                     },
                     body: JSON.stringify(body)
                 });
                 
-                const data = await res.json();
+                const contentType = res.headers.get('content-type');
+                const data = contentType && contentType.includes('application/json') ? await res.json() : await res.text();
                 
-                if (data.status === 'success') {
+                if (data.status === 'success' || (typeof data === 'object' && data.status === 'success')) {
                     addLog(`${action} ${param}: ${data.message}`, 'success');
                     document.getElementById('hermes-actions').textContent = 
                         parseInt(document.getElementById('hermes-actions').textContent) + 1;
@@ -852,7 +867,11 @@
             }
         }
         
+        const API_KEY = localStorage.getItem('alma_secret');
+        }
+        
         async function checkStatus() {
+            if (!API_KEY) return;
             try {
                 await fetch('/health');
                 document.getElementById('jarvis-status').className = 'status-indicator online';
@@ -870,7 +889,7 @@
         
         updateTime();
         setInterval(updateTime, 1000);
-        setInterval(updateUptime, 60000);
+        setInterval(updateUptime, 1000);
         checkStatus();
         setInterval(checkStatus, 30000);
         

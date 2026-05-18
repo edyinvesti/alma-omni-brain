@@ -10,7 +10,9 @@ app = Flask(__name__)
 CORS(app)
 hermes = HermesAgent()
 
-HERMES_API_KEY = os.environ.get('HERMES_API_KEY', 'alma_secure_key_2024')
+HERMES_API_KEY = os.environ.get('HERMES_API_KEY')
+if not HERMES_API_KEY:
+    raise ValueError("HERMES_API_KEY não configurada no .env")
 
 ALLOWED_COMMANDS = {
     'chrome': 'Abrir navegador Chrome',
@@ -48,12 +50,15 @@ ALLOWED_COMMANDS = {
     'press': 'Pressionar tecla',
 }
 
+import hmac
+import secrets
+
 def verify_api_key(request):
     auth_header = request.headers.get('Authorization', '')
     if not auth_header.startswith('Bearer '):
         return False
     token = auth_header[7:]
-    return token == HERMES_API_KEY
+    return hmac.compare_digest(token, HERMES_API_KEY)
 
 @app.route('/api/hermes/exec', methods=['POST'])
 def exec_command():

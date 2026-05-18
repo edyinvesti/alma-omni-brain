@@ -16,14 +16,51 @@ const rateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX = 30;
 
-function sanitizeInput(input) {
-    if (!input || typeof input !== 'string') return '';
-    return input.replace(/[;&|`$(){}<>]/g, '').substring(0, 500);
+function cleanRateLimit() {
+    const now = Date.now();
+    for (const [key, val] of rateLimit) {
+        if (now > val.resetTime + 60000) rateLimit.delete(key);
+    }
+}
+setInterval(cleanRateLimit, 300000);
+
+const ENDPOINT_LIMITS = {
+    '/api/brain': { max: 10, window: 60000 },
+    '/api/action': { max: 20, window: 60000 },
+    '/health': { max: 100, window: 60000 },
+    'default': { max: 30, window: 60000 }
+};
+
+function checkRateLimit(identifier, endpoint = 'default') {
+    const now = Date.now();
+    const limitConfig = ENDPOINT_LIMITS[endpoint] || ENDPOINT_LIMITS['default'];
+    const { max, window } = limitConfig;
+    const key = `${identifier}:${endpoint}`;
+    
+    if (!rateLimit.has(key)) {
+        rateLimit.set(key, { count: 1, resetTime: now + window });
+        return true;
+    }
+    const limit = rateLimit.get(key);
+    if (now > limit.resetTime) {
+        rateLimit.set(key, { count: 1, resetTime: now + window });
+        return true;
+    }
+    if (limit.count >= max) return false;
+    limit.count++;
+    return true;
 }
 
 function sanitizeCommand(command) {
     if (!command || typeof command !== 'string') return '';
-    return command.replace(/"/g, '\\"').replace(/;/g, '').replace(/\|/g, '').replace(/&&/g, '').replace(/\n/g, '');
+    // [SECURITY PATCH] Impede injeção via PowerShell subexpressions $(), escape de backtick, 
+    // ou encadeamento de comandos. Permite '&' APENAS para queries de URL seguras.
+    return command.replace(/"/g, '\\"')
+                  .replace(/;/g, '')
+                  .replace(/\|/g, '')
+                  .replace(/`/g, '')
+                  .replace(/\$|\(|\)|<|>/g, '')
+                  .replace(/\n/g, '');
 }
 
 function validateFilePath(filePath) {
@@ -62,6 +99,9 @@ const GROQ_API_KEY = (process.env.GROQ_API_KEY || process.env.GROQ_KEY || "").tr
 if (!GROQ_API_KEY) {
     console.warn("[AVISO] GROQ_API_KEY não configurada no .env");
 }
+
+// Chave Gemini para fallback
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 // Detecta modo Nuvem
 const IS_CLOUD = process.env.CLOUD_MODE === 'true' || !!process.env.RENDER;
@@ -153,7 +193,21 @@ app.use(cors({
 app.use(express.json({ limit: '10kb' }));
 
 app.use((req, res, next) => {
-    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self';");
+    res.setHeader("Content-Security-Policy", 
+        "default-src 'self'; " +
+        "script-src 'self' https://cdn.jsdelivr.net https://cdn.socket.io https://cdnjs.cloudflare.com; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' https://fonts.gstatic.com; " +
+        "img-src 'self' data: blob: https://cdn-icons-png.flaticon.com; " +
+        "connect-src 'self' https://cdn.socket.io https://cdn.jsdelivr.net; " +
+        "frame-src 'none'; " +
+        "object-src 'none'; " +
+        "base-uri 'self';");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "microphone=(), camera=(), geolocation=()");
     next();
 });
 
@@ -165,9 +219,10 @@ if (!API_SECRET) {
 
 const securityMiddleware = (req, res, next) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    const endpoint = req.path;
 
-    if (!checkRateLimit(ip)) {
-        console.warn(`[SENTINEL] Rate limit excedido! IP: ${ip}`);
+    if (!checkRateLimit(ip, endpoint)) {
+        console.warn(`[SENTINEL] Rate limit excedido! IP: ${ip} Endpoint: ${endpoint}`);
         return res.status(429).json({ error: 'Muitas requisições. Aguarde um momento.' });
     }
 
@@ -526,6 +581,30 @@ async function callGroqModel(model, messages) {
     });
 }
 
+// --- GEMINI FALLBACK ---
+async function callGemini(prompt, context = "") {
+    if (!GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY não configurada");
+    }
+    
+    const fullPrompt = `${prompt}\n\nContexto: ${context}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: fullPrompt }] }]
+        })
+    });
+    
+    const data = await response.json();
+    if (data.candidates && data.candidates[0]) {
+        return data.candidates[0].content.parts[0].text;
+    }
+    throw new Error("Resposta Gemini inválida");
+}
+
 // --- HELPER PARA PENSAMENTO AI (GROQ LLM) com Fallback Automático ---
 async function askAlmaBrain(prompt, context = "") {
     // Injeta data/hora de Brasília em tempo real
@@ -595,9 +674,85 @@ async function askAlmaBrain(prompt, context = "") {
         }
     }
 
-    // Todos os modelos falharam — alerta total
-    console.error('[GROQ] 🚨 TODOS OS MODELOS ESGOTADOS!');
-    const alertMsg = '🚨 ALERTA: Créditos de IA esgotados em todos os modelos. O sistema de IA está temporariamente offline. Aguarde reset diário ou recarregue os créditos em console.groq.com';
+    // Todos os modelos falharam — tenta Gemini como fallback
+    console.warn('[GROQ] 🚨 Todos os modelos Groq esgotados. Tentando Gemini...');
+    
+    if (GEMINI_API_KEY) {
+        try {
+            const geminiResponse = await callGemini(prompt, context);
+            await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', geminiResponse]);
+            await handleMemoryActions(geminiResponse);
+            io.emit('new_log', { source: 'SISTEMA', message: '🔄 IA usando Gemini como fallback', timestamp: new Date().toISOString() });
+            return geminiResponse;
+        } catch (geminiErr) {
+            console.error('[GEMINI] Erro:', geminiErr.message);
+        }
+    }
+
+    // Tenta OpenRouter
+    const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+    if (OPENROUTER_KEY) {
+        try {
+            console.warn('[OPENROUTER] Tentando fallback via OpenRouter (auto)...');
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${OPENROUTER_KEY}`,
+                    'HTTP-Referer': 'http://localhost:3000',
+                    'X-Title': 'Jarvis ALMA',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'openrouter/auto',
+                    messages: [{ role: 'user', content: `${prompt}\n\nContexto: ${context}` }]
+                })
+            });
+            const orData = await orRes.json();
+            if (orData.choices && orData.choices[0]) {
+                const orResponse = orData.choices[0].message.content;
+                await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', orResponse]);
+                await handleMemoryActions(orResponse);
+                io.emit('new_log', { source: 'SISTEMA', message: '🔄 IA usando OpenRouter como fallback', timestamp: new Date().toISOString() });
+                return orResponse;
+            }
+            throw new Error(JSON.stringify(orData));
+        } catch (orErr) {
+            console.error('[OPENROUTER] Erro:', orErr.message || orErr);
+        }
+    }
+
+    // Tenta HuggingFace como último recurso
+    const HF_KEY = process.env.HF_API_KEY;
+    if (HF_KEY) {
+        try {
+            console.warn('[HUGGINGFACE] Tentando fallback via HuggingFace (Mistral)...');
+            const hfRes = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${HF_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    inputs: `[INST] Você é o ALMA, um assistente de IA direto e leal.\n\n${context}\n\nInstrução: ${prompt} [/INST]`,
+                    parameters: { max_new_tokens: 400, return_full_text: false }
+                })
+            });
+            const hfData = await hfRes.json();
+            if (Array.isArray(hfData) && hfData[0]?.generated_text) {
+                const hfResponse = hfData[0].generated_text.trim();
+                await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', hfResponse]);
+                await handleMemoryActions(hfResponse);
+                io.emit('new_log', { source: 'SISTEMA', message: '🔄 IA usando HuggingFace como fallback', timestamp: new Date().toISOString() });
+                return hfResponse;
+            }
+            throw new Error(JSON.stringify(hfData));
+        } catch (hfErr) {
+            console.error('[HUGGINGFACE] Erro:', hfErr.message || hfErr);
+        }
+    }
+    
+    // Todos falharam
+    const alertMsg = '🚨 ALERTA: Créditos de IA esgotados em todos os modelos. O sistema de IA está temporariamente offline.';
     io.emit('new_log', { source: '⚠️ SISTEMA', message: alertMsg, timestamp: new Date().toISOString() });
     io.emit('ai_offline', { message: alertMsg });
 
@@ -605,7 +760,7 @@ async function askAlmaBrain(prompt, context = "") {
         bot.api.sendMessage(adminChatId, `🚨 *ALMA OFFLINE*\n${alertMsg}`, { parse_mode: 'Markdown' }).catch(() => {});
     }
 
-    return 'Comandante, todos os créditos de IA foram esgotados temporariamente. O sistema volta automaticamente quando o limite resetar. Verifique console.groq.com para mais detalhes.';
+    return 'Comandante, todos os créditos de IA foram esgotados temporariamente. O sistema volta automaticamente quando o limite resetar.';
 }
 
 
@@ -976,8 +1131,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
         } else {
             // Resposta inteligente via AI com o Contexto Omni
             bot.api.sendChatAction(chatId, 'typing').catch(e => console.error("Erro typing voz", e));
-            const context = await getOmniContext(text);
-            let aiResponse = await askAlmaBrain(text, context);
+            const context = await getOmniContext(cmd);
+            let aiResponse = await askAlmaBrain(cmd, context);
             
             // Processa as ações nos bastidores
             await handleMemoryActions(aiResponse);
@@ -1144,7 +1299,9 @@ app.post('/api/action', securityMiddleware, (req, res) => {
     }
 
     if (command) {
-        const execCmd = process.platform === 'win32' ? `powershell -command "${command.replace(/"/g, '\\"')}"` : command;
+        // [SECURITY PATCH] Uso do sanitizeCommand padronizado para proteger RCE no /api/action SAM
+        const safeCommand = sanitizeCommand(command);
+        const execCmd = process.platform === 'win32' ? `powershell -command "${safeCommand}"` : safeCommand;
         exec(execCmd, (error, stdout, stderr) => {
             if (error) {
                 console.error(`[SAM] Erro ao executar comando: ${error.message}`);

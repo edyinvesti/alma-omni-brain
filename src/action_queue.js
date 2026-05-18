@@ -130,9 +130,10 @@ class ActionQueue extends EventEmitter {
     }
 
     async runCommand(command) {
-        const { execSync } = require('child_process');
-        const output = execSync(command, { encoding: 'utf8', timeout: 30000 });
-        return { success: true, output: output.substring(0, 1000) };
+        // [SECURITY PATCH] RCE BLOCKED
+        // Executar comandos arbitrários no sistema operacional direto por string é uma vulnerabilidade fatal (Command Injection).
+        console.warn(`[SECURITY] Tentativa bloqueada de executar comando arbitrário: ${command}`);
+        return { success: false, output: "Bloqueado pelo Protocolo de Segurança: Não é permitido invocar comandos de shell arbitrários." };
     }
 
     async webSearch(query) {

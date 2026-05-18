@@ -32,11 +32,12 @@ let ctx = null;
 
 function initAudio() {
   if (ctx) return;
-  try { ctx = new AudioCtx(); } catch(e) {}
+  try { ctx = new AudioCtx(); } catch(e) { console.warn('[AUDIO] initAudio failed:', e.message); }
 }
 
 function playTone({ freq = 440, type = 'sine', vol = 0.15, attack = 0.01, decay = 0.1, sustain = 0.05, release = 0.3, start = 0 }) {
-  if (!ctx || ctx.state === 'suspended') return;
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
   const t = ctx.currentTime + start;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -53,7 +54,8 @@ function playTone({ freq = 440, type = 'sine', vol = 0.15, attack = 0.01, decay 
 }
 
 function playNoise({ vol = 0.04, freq = 800, q = 1, start = 0, dur = 0.15 }) {
-  if (!ctx || ctx.state === 'suspended') return;
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
   const t = ctx.currentTime + start;
   const bufSize = ctx.sampleRate * dur;
   const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
@@ -76,7 +78,8 @@ function playNoise({ vol = 0.04, freq = 800, q = 1, start = 0, dur = 0.15 }) {
 }
 
 function playFreqSweep({ freqStart = 200, freqEnd = 800, type = 'sawtooth', vol = 0.08, dur = 0.5, start = 0 }) {
-  if (!ctx || ctx.state === 'suspended') return;
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
   const t = ctx.currentTime + start;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -176,5 +179,5 @@ document.addEventListener('click', unlockAudio);
 document.addEventListener('keydown', unlockAudio);
 
 window.addEventListener('load', () => {
-    try { initAudio(); playAlmaSound(); audioStarted = true; } catch(e) {}
+    try { initAudio(); playAlmaSound(); audioStarted = true; } catch(e) { console.warn('[AUDIO] load failed:', e.message); }
 });

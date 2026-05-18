@@ -70,9 +70,9 @@ async function searchSimilar(query, topK = 5) {
     
     const scored = results.rows.map(row => {
         let embedding = null;
-        try {
-            embedding = JSON.parse(row.embedding || '[]');
-        } catch (e) {}
+            try {
+                embedding = JSON.parse(row.embedding || '[]');
+            } catch (e) { console.warn('[RAG] Erro parsing embedding:', e.message); }
         
         if (!embedding || embedding.length === 0) {
             return { ...row, score: 0 };

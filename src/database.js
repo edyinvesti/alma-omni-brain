@@ -4,13 +4,14 @@ class Database {
     constructor() {
         this.client = null;
         this.connected = false;
+        this._connectPromise = null;
     }
 
-    // ✅ NOV0: Conectar com retry
     async connect() {
         if (this.connected && this.client) {
             return this.client;
         }
+        if (this._connectPromise) return this._connectPromise;
 
         const url = process.env.TURSO_DATABASE_URL;
         const token = process.env.TURSO_AUTH_TOKEN;
@@ -27,6 +28,7 @@ class Database {
                 this.connected = true;
                 console.log('[DB] Conectado ao Turso');
                 await this.initTables();
+                this._connectPromise = null;
                 return this.client;
             } catch (e) {
                 retries--;
@@ -195,7 +197,7 @@ class Database {
                 args: [level, message, context]
             });
         } catch (e) {
-            // Silencioso
+            console.warn('[DB] Erro:', e.message);
         }
     }
 
@@ -209,7 +211,7 @@ class Database {
                 args: [type, target, status, result]
             });
         } catch (e) {
-            // Silencioso
+            console.warn('[DB] Erro:', e.message);
         }
     }
 
