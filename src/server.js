@@ -18,22 +18,35 @@ const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX = 30;
 
 const BRAIN_CACHE_TTL = 1000 * 60 * 30;
+const BRAIN_CACHE_MAX_SIZE = 500;
 const brainCache = new Map();
 function getCacheKey(prompt) {
     return prompt.toLowerCase().trim().substring(0, 100);
 }
 
-setInterval(() => {
+function cleanBrainCache() {
     const now = Date.now();
     let removed = 0;
+
     for (const [key, val] of brainCache) {
         if (now - val.timestamp > BRAIN_CACHE_TTL) {
             brainCache.delete(key);
             removed++;
         }
     }
+
+    if (brainCache.size > BRAIN_CACHE_MAX_SIZE) {
+        const entries = Array.from(brainCache.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+        const toRemove = brainCache.size - BRAIN_CACHE_MAX_SIZE;
+        for (let i = 0; i < toRemove; i++) {
+            brainCache.delete(entries[i][0]);
+            removed++;
+        }
+    }
+
     if (removed > 0) console.log(`[BRAIN CACHE] Limpeza: ${removed} entradas removidas`);
-}, 1000 * 60 * 10);
+}
+setInterval(cleanBrainCache, 1000 * 60 * 10);
 
 function cleanRateLimit() {
     const now = Date.now();
@@ -55,7 +68,7 @@ function checkRateLimit(identifier, endpoint = 'default') {
     const limitConfig = ENDPOINT_LIMITS[endpoint] || ENDPOINT_LIMITS['default'];
     const { max, window } = limitConfig;
     const key = `${identifier}:${endpoint}`;
-    
+
     if (!rateLimit.has(key)) {
         rateLimit.set(key, { count: 1, resetTime: now + window });
         return true;
@@ -72,8 +85,6 @@ function checkRateLimit(identifier, endpoint = 'default') {
 
 function sanitizeCommand(command) {
     if (!command || typeof command !== 'string') return '';
-    // [SECURITY PATCH] Impede injeção via PowerShell subexpressions $(), escape de backtick, 
-    // ou encadeamento de comandos. Permite '&' APENAS para queries de URL seguras.
     return command.replace(/"/g, '\\"')
                   .replace(/;/g, '')
                   .replace(/\|/g, '')
@@ -124,24 +135,12 @@ function generateJWT(userId) {
     return `${header}.${payload}.${signature}`;
 }
 
-function checkRateLimit(identifier) {
-    const now = Date.now();
-    if (!rateLimit.has(identifier)) {
-        rateLimit.set(identifier, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-        return true;
-    }
-    const limit = rateLimit.get(identifier);
-    if (now > limit.resetTime) {
-        rateLimit.set(identifier, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-        return true;
-    }
-    if (limit.count >= RATE_LIMIT_MAX) return false;
-    limit.count++;
-    return true;
-}
-
 // ✅ NOVOS MÓDULOS INTEGRADOS
 const Database = require('./database');
+const iamobilClient = (process.env.IAMOBIL_DB_URL && process.env.IAMOBIL_DB_TOKEN) ? createClient({
+    url: process.env.IAMOBIL_DB_URL,
+    authToken: process.env.IAMOBIL_DB_TOKEN
+}) : null;
 const ActionQueue = require('./action_queue');
 const ActionParser = require('./action_parser');
 const AppFinder = require('./app_finder');
@@ -328,16 +327,12 @@ initDB();
 
 
 async function dbGet(sql, params = []) {
-    if (db_type === "cloud") {
-        const res = await db.execute({ sql, args: params });
-        return res.rows[0];
-    } else {
-        return new Promise((resolve, reject) => {
-            db.get(sql, params, (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+    try {
+        const result = await Database.client.execute({ sql, args: params });
+        return result.rows?.[0] || null;
+    } catch (e) {
+        console.error('[dbGet] Erro:', e.message);
+        return null;
     }
 }
 
@@ -538,6 +533,14 @@ async function getOmniContext(query = "") {
             }
         }
         
+        // --- DADOS IAMOBIL (SE DISPONÍVEL) ---
+        if (iamobilClient && query.toLowerCase().includes('iamobil')) {
+             try {
+                 const iStats = await iamobilClient.execute('SELECT COUNT(*) as total FROM properties');
+                 context += `\n=== DADOS IAMOBIL ===\nTotal de Imóveis: ${iStats.rows[0]?.total || 0}\n`;
+             } catch(e) { console.error("[IAmobil Context] Erro:", e.message); }
+        }
+
         context += "\n=== HISTÓRICO RECENTE ===\n";
         history.rows.reverse().forEach(h => context += `${h.role}: ${h.content}\n`);
         
@@ -977,17 +980,6 @@ if (bot) {
     // =====================================================
     // TELEGRAM REMOTE COMMAND CENTER (C2 FULL CONTROL)
     // =====================================================
-    bot.command("status", async (ctx) => {
-        await ctx.reply("🤖 *A.L.M.A. Core Online*\nTodos os sistemas operacionais e prontos para obedecer, Comandante.", { parse_mode: 'Markdown' });
-    });
-
-    bot.command("ping", async (ctx) => {
-        await ctx.reply("🏓 Pong. Conexão neural estável.");
-    });
-
-    bot.command("ajuda", async (ctx) => {
-        await ctx.reply(`🦾 *A.L.M.A. - Central de Comando Remoto*\n\nExemplos de comandos:\n\n🔍 *Pesquisar:* \`pesquise sobre bitcoin\`\n💻 *Abrir app:* \`abra o chrome\`\n📊 *Sistema:* \`/status\`\n📈 *Leads:* \`/leads\`\n💰 *Vendas:* \`/vendas\`\n🖥️ *Print:* \`/print\`\n\n_Qualquer mensagem de texto será interpretada como comando!_`, { parse_mode: 'Markdown' });
-    });
 
     bot.command("leads", async (ctx) => {
         try {
@@ -1028,6 +1020,27 @@ if (bot) {
             }
         } catch (err) {
             await ctx.reply("❌ Erro ao consultar banco de empresas.");
+        }
+    });
+
+    bot.command("iamobil", async (ctx) => {
+        if (!iamobilClient) return ctx.reply("❌ IAmobil não integrado. Configure IAMOBIL_DB_URL no Render.");
+        try {
+            const props = await iamobilClient.execute('SELECT COUNT(*) as total FROM properties');
+            const latest = await iamobilClient.execute('SELECT title, price, city FROM properties ORDER BY id DESC LIMIT 3');
+            
+            let msgText = `🏠 *IAmobil - Relatório Central*\n\n`;
+            msgText += `📊 *Total de Imóveis:* ${props.rows[0]?.total || 0}\n\n`;
+            msgText += `✨ *Últimos Lançamentos:*\n`;
+            
+            latest.rows.forEach(p => {
+                msgText += `• ${p.title} - R$ ${p.price} (${p.city})\n`;
+            });
+            
+            await ctx.reply(msgText, { parse_mode: 'Markdown' });
+        } catch (err) {
+            console.error("[IAMOBIL CMD] Erro:", err.message);
+            await ctx.reply("❌ Erro ao conectar com o banco de dados da IAmobil.");
         }
     });
 
