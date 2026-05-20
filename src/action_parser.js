@@ -58,7 +58,8 @@ class ActionParser {
                 const jsonMatch = fullMatch.match(/\{[^}]+\}/);
                 if (jsonMatch) {
                     const data = JSON.parse(jsonMatch[0]);
-                    return { type: data.type, target: data.target, raw: fullMatch };
+                    const type = data.type || data.action;
+                    return { type: type, target: data.target || data.value || data.text || '', raw: fullMatch };
                 }
             } catch (e) {
                 // Parse manual
@@ -141,7 +142,8 @@ class ActionParser {
         const validTypes = [
             'open_app', 'open_url', 'search', 'command',
             'type_text', 'click', 'screenshot', 'volume',
-            'work_mode', 'cleanup', 'play_media', 'pause_media'
+            'work_mode', 'cleanup', 'play_media', 'pause_media',
+            'speak', 'update_memory', 'save_knowledge'
         ];
         
         return validTypes.includes(action.type);

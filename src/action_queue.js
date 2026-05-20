@@ -112,11 +112,34 @@ class ActionQueue extends EventEmitter {
             case 'search':
                 return this.webSearch(action.query);
                 
+            case 'speak':
+                return this.speakText(action.target || action.text || action.value);
+                
             default:
                 throw new Error(`Tipo de ação desconhecido: ${action.type}`);
         }
     }
 
+    async speakText(text) {
+        if (!text) return { success: false, error: 'Texto para fala não fornecido.' };
+        
+        const { exec } = require('child_process');
+        const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
+        const command = `PowerShell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('${sanitized}')"`;
+        
+        console.log(`[TTS] Falando: ${text}`);
+        
+        return new Promise((resolve) => {
+            exec(command, (error) => {
+                if (error) {
+                    console.error(`[TTS] Erro: ${error.message}`);
+                    resolve({ success: false, error: error.message });
+                } else {
+                    resolve({ success: true });
+                }
+            });
+        });
+    }
     async openApplication(name) {
         const AppFinder = require('./app_finder');
         return await AppFinder.openApp(name);

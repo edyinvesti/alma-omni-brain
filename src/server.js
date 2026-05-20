@@ -7,14 +7,33 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { Server } = require('socket.io');
-const { Bot } = require('grammy');
-const { exec } = require('child_process');
+const { Bot, InputFile } = require('grammy');
+const { exec, execSync } = require('child_process');
 const { createClient } = require('@libsql/client');
+const FormData = require('form-data');
 
 const ALLOWED_DIRS = [os.homedir(), process.env.USERPROFILE || 'C:\\Users\\User'];
 const rateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60000;
 const RATE_LIMIT_MAX = 30;
+
+const BRAIN_CACHE_TTL = 1000 * 60 * 30;
+const brainCache = new Map();
+function getCacheKey(prompt) {
+    return prompt.toLowerCase().trim().substring(0, 100);
+}
+
+setInterval(() => {
+    const now = Date.now();
+    let removed = 0;
+    for (const [key, val] of brainCache) {
+        if (now - val.timestamp > BRAIN_CACHE_TTL) {
+            brainCache.delete(key);
+            removed++;
+        }
+    }
+    if (removed > 0) console.log(`[BRAIN CACHE] Limpeza: ${removed} entradas removidas`);
+}, 1000 * 60 * 10);
 
 function cleanRateLimit() {
     const now = Date.now();
@@ -70,6 +89,39 @@ function validateFilePath(filePath) {
         return ALLOWED_DIRS.some(dir => normalized.startsWith(dir));
     }
     return true;
+}
+
+const API_SECRET = process.env.API_SECRET;
+if (!API_SECRET) {
+    console.error("[ERRO FATAL] API_SECRET não configurado no .env!");
+    process.exit(1);
+}
+
+const ALLOWED_IPS = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',').map(ip => ip.trim()) : [];
+const JWT_SECRET = process.env.JWT_SECRET || API_SECRET + '_jwt_2026';
+
+function verifyIP(ip) {
+    if (ALLOWED_IPS.length === 0) return true;
+    const cleanIP = ip.replace(/^::ffff:/, '').replace(/^127\.0\.0\.1$/, 'localhost');
+    return ALLOWED_IPS.includes(cleanIP) || ALLOWED_IPS.includes(ip);
+}
+
+function verifyJWT(token) {
+    if (!token) return false;
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return false;
+        const [header, payload, signature] = parts;
+        const expectedSig = require('crypto').createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('hex').substring(0, 8);
+        return signature === expectedSig;
+    } catch { return false; }
+}
+
+function generateJWT(userId) {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({ sub: userId, iat: Date.now(), exp: Date.now() + 86400000 })).toString('base64url');
+    const signature = require('crypto').createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('hex').substring(0, 8);
+    return `${header}.${payload}.${signature}`;
 }
 
 function checkRateLimit(identifier) {
@@ -144,22 +196,7 @@ if (!botToken || !adminChatId) {
 
     console.log('[TELEGRAM] Bot C2 Inicializado, aguardando comandos.');
 
-    // Webhook para nuvem
-    if (IS_CLOUD && process.env.RENDER_EXTERNAL_URL) {
-        const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/telegram-webhook`;
-        console.log(`[TELEGRAM] Webhook configurado: ${webhookUrl}`);
 
-        app.post('/telegram-webhook', async (req, res) => {
-            await bot.handleUpdate(req.body);
-            res.send('OK');
-        });
-    }
-
-    // Iniciar polling se habilitado localmente
-    if (process.env.TELEGRAM_LOCAL_POLLING === 'true') {
-        bot.start();
-        console.log('[TELEGRAM] Polling local ativo.');
-    }
 }
 
 // --- GLOBAL ERROR HANDLERS ---
@@ -211,15 +248,15 @@ app.use((req, res, next) => {
     next();
 });
 
-const API_SECRET = process.env.API_SECRET;
-if (!API_SECRET) {
-    console.error("[ERRO FATAL] API_SECRET não configurado no .env!");
-    process.exit(1);
-}
 
 const securityMiddleware = (req, res, next) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const endpoint = req.path;
+
+    if (!verifyIP(ip)) {
+        console.warn(`[SENTINEL] IP bloqueado! IP: ${ip} Endpoint: ${endpoint}`);
+        return res.status(403).json({ error: 'IP não autorizado.' });
+    }
 
     if (!checkRateLimit(ip, endpoint)) {
         console.warn(`[SENTINEL] Rate limit excedido! IP: ${ip} Endpoint: ${endpoint}`);
@@ -227,7 +264,6 @@ const securityMiddleware = (req, res, next) => {
     }
 
     const incomingSecret = req.headers['x-alma-key'];
-    console.log(`[SENTINEL DEBUG] Recebi chave: "${incomingSecret}" (Esperado: "${API_SECRET}")`);
     if (incomingSecret !== API_SECRET) {
         console.warn(`[SENTINEL] Tentativa de acesso não autorizado! IP: ${ip} para ${req.path}`);
 
@@ -279,9 +315,10 @@ async function dbExecute(sql, params = []) {
 // Inicializa as tabelas do Omni-Brain em ambos os modos (Local e Nuvem)
 const initDB = async () => {
     try {
-        await db.execute({ sql: 'CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)' });
-        await db.execute({ sql: 'CREATE TABLE IF NOT EXISTS memory (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE, value TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)' });
-        await db.execute({ sql: 'CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)' });
+        await Database.connect();
+        await Database.client.execute({ sql: 'CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)' });
+        await Database.client.execute({ sql: 'CREATE TABLE IF NOT EXISTS memory (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE, value TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)' });
+        await Database.client.execute({ sql: 'CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)' });
         console.log('[SISTEMA] Tabelas do Omni-Brain inicializadas.');
     } catch (err) {
         console.error('[ERRO DB] Falha na inicialização:', err.message);
@@ -462,9 +499,9 @@ async function getOmniContext(query = "") {
         
         // --- BUSCA RAG VETORIAL (CONHECIMENTO TÉCNICO) ---
         if (query) {
-            const knowledge = await searchKnowledge(query, 5);
+            const knowledge = await searchKnowledge(query, 2);
             if (knowledge.length > 0) {
-                context += "\n=== CONHECIMENTO TÉCNICO (RAG VETORIAL) ===\n";
+                context += "\n=== CONHECIMENTO TÉCNICO VETORIAL (RAG) ===\n";
                 knowledge.forEach(k => context += `[${k.title}]: ${k.content.substring(0, 500)}...\n`);
             }
         }
@@ -494,6 +531,14 @@ async function handleMemoryActions(response) {
                 console.log(`[MEMÓRIA] Atualizado: ${action.key}`);
             } else if (action.type === 'update_biography') {
                 await Database.log('info', `Biografia: ${action.fact}`, 'ALMA_LEARNING');
+            } else if (action.type === 'save_knowledge' && action.title && action.content) {
+                try {
+                    const vectorRag = require('../bin/vector_rag.js');
+                    await vectorRag.addKnowledgeWithEmbedding('ALMA_Core', action.title, action.content);
+                    console.log(`[RAG] Novo conhecimento vetorizado: ${action.title}`);
+                } catch (e) {
+                    console.error("[RAG] Erro ao vetorizar:", e.message);
+                }
             } else {
                 // Ações de automação vão para a fila
                 const queueAction = {
@@ -606,7 +651,34 @@ async function callGemini(prompt, context = "") {
 }
 
 // --- HELPER PARA PENSAMENTO AI (GROQ LLM) com Fallback Automático ---
+let dailyAiRequests = 0;
+let lastRequestDate = new Date().toDateString();
+const AI_ALERT_THRESHOLD = 400; // Alerta de uso de créditos (supondo 500 limite/dia)
+let hasSentAiAlert = false;
+
 async function askAlmaBrain(prompt, context = "") {
+    const cacheKey = getCacheKey(prompt);
+    const cached = brainCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < BRAIN_CACHE_TTL)) {
+        console.log(`[BRAIN CACHE] Hit para: "${prompt.substring(0, 30)}..."`);
+        return cached.response;
+    }
+
+    // Alerta de Billing (Fix 4)
+    const today = new Date().toDateString();
+    if (today !== lastRequestDate) {
+        dailyAiRequests = 0;
+        lastRequestDate = today;
+        hasSentAiAlert = false;
+    }
+    dailyAiRequests++;
+    if (dailyAiRequests >= AI_ALERT_THRESHOLD && !hasSentAiAlert) {
+        hasSentAiAlert = true;
+        if (bot && adminChatId) {
+            bot.api.sendMessage(adminChatId, `⚠️ *Aviso de Billing:* Você atingiu o limite seguro de consultas de IA diárias (${dailyAiRequests} usos). Cuidado com o crédito nas APIs gratuitas!`, { parse_mode: "Markdown" }).catch(e=>console.error("Erro billing:", e));
+        }
+    }
+
     // Injeta data/hora de Brasília em tempo real
     const agora = new Date();
     const optsData = { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' };
@@ -618,25 +690,27 @@ async function askAlmaBrain(prompt, context = "") {
     
     🕐 DATA E HORA ATUAL (Brasília, UTC-3): ${dataAtual}, ${horaAtual} BRT
     
+    🏙️ NÚCLEO DE GESTÃO (20 EMPRESAS):
+    1. Sua missão agora inclui a gestão e aprendizado de 20 empresas.
+    2. Sempre que o Comandante mencionar uma empresa, verifique a memória para associar fatos, metas e leads a ela.
+    3. Se aprender algo novo sobre uma empresa, salve usando chaves como: "empresa_[nome]_[fato]".
+    
     REGRAS DE OURO (MUITO IMPORTANTE):
     1. Seja CURTO e DIRETO. Máximo de 2 frases.
     2. NUNCA descreva o que vai fazer ou mencione "Vou atualizar minha memória", "Vou registrar isso", etc.
     3. As tags [[ACTION]] são invisíveis; NUNCA mencione-as na resposta.
-    4. NÃO REPITA respostas que já foram dadas no histórico recente. Se a pergunta for igual, varie a formulação ou adicione algo novo.
+    4. NÃO REPITA respostas que já foram dadas no histórico recente.
     5. Não use saudações longas ou despedidas.
-    6. Use a data/hora fornecida acima APENAS se o Comandante perguntar explicitamente que horas são ou que dia é hoje. NUNCA inclua a data/hora em respostas comuns.
-    7. Use o histórico de conversa para manter CONTINUIDADE — lembre o que foi dito antes e construa sobre isso.
-    8. Ao salvar memória, use chaves ESPECÍFICAS (ex: "cor_favorita_comandante", "projeto_atual") nunca chaves genéricas como "atividade_atual".
+    6. Use a data/hora fornecida acima APENAS se o Comandante perguntar explicitamente.
     
     DIRETRIZES TÉCNICAS (SAM):
-    - Se aprender algo: [[ACTION: {"action":"update_memory", "key":"...", "value":"..."}]]
-    - Se fato biográfico: [[ACTION: {"action":"update_biography", "fact":"..."}]]
-    - Se pedirem para ABRIR/PESQUISAR algo na Web (Google, Chrome, etc): [[ACTION: {"action":"open", "target":"...url_da_pesquisa..."}]]
+    - Falar com o usuário (Voz): [[ACTION: {"type":"speak", "text":"..."}]]
+    - Fatos Curtos: [[ACTION: {"type":"update_memory", "key":"...", "value":"..."}]]
+    - Dados Longos/Documentos: [[ACTION: {"type":"save_knowledge", "title":"...", "content":"..."}]]
+    - ABRIR/PESQUISAR: [[ACTION: {"type":"open_url", "target":"..."}]]
     
-    EXEMPLOS OBRIGATÓRIOS:
-    - User: "pesquise flor do cerrado" -> Resp: "Vou pesquisar sobre a Flor do Cerrado para você. [[ACTION: {"action":"open", "target":"https://www.google.com/search?q=flor+do+cerrado"}]]"
-    - User: "abra o google" -> Resp: "Com certeza, Comandante. Abrindo o Google agora. [[ACTION: {"action":"open", "target":"https://www.google.com"}]]"
-    - IMPORTANTE: O Comandante quer ver o navegador abrindo! SEMPRE inclua a tag ACTION se houver um site ou busca envolvida.
+    INSTRUÇÃO ESPECIAL:
+    Se o Comandante perguntar "Qual é o seu nome?" ou similar, responda em texto E inclua a ação de fala: [[ACTION: {"type":"speak", "text":"Meu nome é ALMA. Sou sua inteligência central."}]]
     
     Contexto Omni: ${context}`;
 
@@ -662,6 +736,7 @@ async function askAlmaBrain(prompt, context = "") {
 
             await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', response]);
             await handleMemoryActions(response);
+            brainCache.set(cacheKey, { response, timestamp: Date.now() });
             return response;
 
         } catch (err) {
@@ -682,6 +757,7 @@ async function askAlmaBrain(prompt, context = "") {
             const geminiResponse = await callGemini(prompt, context);
             await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', geminiResponse]);
             await handleMemoryActions(geminiResponse);
+            brainCache.set(cacheKey, { response: geminiResponse, timestamp: Date.now() });
             io.emit('new_log', { source: 'SISTEMA', message: '🔄 IA usando Gemini como fallback', timestamp: new Date().toISOString() });
             return geminiResponse;
         } catch (geminiErr) {
@@ -712,6 +788,7 @@ async function askAlmaBrain(prompt, context = "") {
                 const orResponse = orData.choices[0].message.content;
                 await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', orResponse]);
                 await handleMemoryActions(orResponse);
+                brainCache.set(cacheKey, { response: orResponse, timestamp: Date.now() });
                 io.emit('new_log', { source: 'SISTEMA', message: '🔄 IA usando OpenRouter como fallback', timestamp: new Date().toISOString() });
                 return orResponse;
             }
@@ -742,6 +819,7 @@ async function askAlmaBrain(prompt, context = "") {
                 const hfResponse = hfData[0].generated_text.trim();
                 await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', hfResponse]);
                 await handleMemoryActions(hfResponse);
+                brainCache.set(cacheKey, { response: hfResponse, timestamp: Date.now() });
                 io.emit('new_log', { source: 'SISTEMA', message: '🔄 IA usando HuggingFace como fallback', timestamp: new Date().toISOString() });
                 return hfResponse;
             }
@@ -763,15 +841,102 @@ async function askAlmaBrain(prompt, context = "") {
     return 'Comandante, todos os créditos de IA foram esgotados temporariamente. O sistema volta automaticamente quando o limite resetar.';
 }
 
+async function sendTelegramVoice(chatId, text) {
+    if (!bot || !chatId) return;
+    const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
+    
+    try {
+        // Gera áudio no Windows usando PowerShell
+        const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
+        const psCommand = `PowerShell -Command "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${tempWav}'); $s.Speak('${sanitized}'); $s.Dispose()"`;
+        
+        await new Promise((resolve, reject) => {
+            exec(psCommand, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+
+        if (fs.existsSync(tempWav)) {
+            await bot.api.sendVoice(chatId, new InputFile(tempWav));
+            fs.unlinkSync(tempWav);
+        }
+    } catch (err) {
+        console.error("[TELEGRAM TTS] Erro:", err.message);
+    }
+}
+
+// --- VOICE PROCESSING (STT / TTS) ---
+async function transcribeAudio(audioPath) {
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY não configurada");
+    
+    const form = new FormData();
+    form.append('file', fs.createReadStream(audioPath));
+    form.append('model', 'whisper-large-v3');
+    form.append('language', 'pt');
+    form.append('response_format', 'json');
+
+    return new Promise((resolve, reject) => {
+        form.submit({
+            hostname: 'api.groq.com',
+            path: '/openai/v1/audio/transcriptions',
+            protocol: 'https:',
+            headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` }
+        }, (err, res) => {
+            if (err) return reject(err);
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(data);
+                    resolve(json.text || "");
+                } catch (e) { reject(new Error("Erro no JSON do Whisper: " + data.substring(0, 100))); }
+            });
+        });
+    });
+}
+
+async function sendTelegramVoice(chatId, text) {
+    if (!bot || !chatId) return;
+    const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
+    
+    try {
+        // Gera áudio no Windows usando PowerShell
+        const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
+        const psCommand = `PowerShell -Command "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${tempWav}'); $s.Speak('${sanitized}'); $s.Dispose()"`;
+        
+        await new Promise((resolve, reject) => {
+            exec(psCommand, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+
+        if (fs.existsSync(tempWav)) {
+            await bot.api.sendVoice(chatId, new InputFile(tempWav));
+            fs.unlinkSync(tempWav);
+        }
+    } catch (err) {
+        console.error("[TELEGRAM TTS] Erro:", err.message);
+    }
+}
+
 
 io.on('connection', (socket) => {
-    const key = socket.handshake.auth?.key || socket.handshake.headers['x-alma-key'];
-    if (key !== API_SECRET) {
-        console.warn(`[REDE] Tentativa de conexão não autorizada. IP: ${socket.handshake.address}`);
+    const ip = socket.handshake.address;
+    if (!verifyIP(ip)) {
+        console.warn(`[REDE] IP bloqueado. IP: ${ip}`);
         socket.disconnect(true);
         return;
     }
-    console.log('[REDE] Dashboard UI conectado à rede neural via WebSockets.');
+    const key = socket.handshake.auth?.key || socket.handshake.headers['x-alma-key'];
+    const token = socket.handshake.auth?.token;
+    if (key !== API_SECRET && !verifyJWT(token)) {
+        console.warn(`[REDE] Tentativa de conexão não autorizada. IP: ${ip}`);
+        socket.disconnect(true);
+        return;
+    }
+    console.log(`[REDE] Dashboard UI conectado. IP: ${ip}`);
     socket.on('disconnect', () => {
         console.log('[REDE] Conexão com Dashboard perdida.');
     });
@@ -814,6 +979,27 @@ if (bot) {
         }
     });
 
+    bot.command("empresa", async (ctx) => {
+        try {
+            const text = ctx.message.text.split(' ')[1];
+            if (!text) {
+                const res = await Database.client.execute('SELECT name FROM companies');
+                const list = res.rows.map(r => `• ${r.name}`).join('\n');
+                return await ctx.reply(`🏢 *Empresas Cadastradas:*\n\n${list || 'Nenhuma empresa cadastrada.'}\n\nUse \`/empresa [nome]\` para mais detalhes.`, { parse_mode: 'Markdown' });
+            }
+            
+            const res = await Database.client.execute({ sql: 'SELECT * FROM companies WHERE name LIKE ?', args: [`%${text}%`] });
+            const company = res.rows[0];
+            if (company) {
+                await ctx.reply(`🏢 *Ficha da Empresa: ${company.name}*\n\n🔹 *Setor:* ${company.sector}\n📝 *Descrição:* ${company.description}\n🎯 *Metas:* ${company.goals}\n✅ *Status:* ${company.status}`, { parse_mode: 'Markdown' });
+            } else {
+                await ctx.reply(`❌ Empresa "${text}" não encontrada no núcleo neural.`);
+            }
+        } catch (err) {
+            await ctx.reply("❌ Erro ao consultar banco de empresas.");
+        }
+    });
+
     bot.command("print", async (ctx) => {
         if (IS_CLOUD) {
             return ctx.reply("❌ Comando indisponível: O núcleo A.L.M.A. está rodando na nuvem e não tem acesso ao monitor físico.");
@@ -846,7 +1032,7 @@ if (bot) {
     });
 
     // === CONTROLE GERAL VIA MENSAGEM LIVRE ===
-    bot.on('message', async (ctx) => {
+    bot.on('message:text', async (ctx) => {
         const msg = ctx.message;
         console.log(`[DEBUG TELEGRAM] Mensagem recebida de Chat ID: ${msg.chat.id}`);
         console.log(`[DEBUG TELEGRAM] Conteúdo: ${msg.text || (msg.voice ? 'Áudio' : 'Outro')}`);
@@ -993,7 +1179,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
             // Filtro Robusto: Limpa [[ACTION]] mesmo se tiverem múltiplas linhas
             const cleanResponse = aiResponse.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
             if (cleanResponse) {
-                bot.api.sendMessage(msg.chat.id, cleanResponse).catch(e => console.error("Erro brain response:", e));
+                await bot.api.sendMessage(msg.chat.id, cleanResponse).catch(e => console.error("Erro brain response:", e));
+                await sendTelegramVoice(msg.chat.id, cleanResponse);
             }
         }
 
@@ -1140,7 +1327,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
             // Filtro Robusto
             const cleanResponse = aiResponse.replace(/\[\[ACTION:[\s\S]*?\]\]/g, "").trim();
             if (cleanResponse) {
-                bot.api.sendMessage(chatId, `🧠 *Brain:* ${cleanResponse}`).catch(e => console.error("Erro brain voz", e));
+                await bot.api.sendMessage(chatId, `🧠 *Brain:* ${cleanResponse}`).catch(e => console.error("Erro brain voz", e));
+                await sendTelegramVoice(chatId, cleanResponse);
             }
         }
     };
@@ -1207,13 +1395,21 @@ const hermesBaseUrl = process.env.HERMES_URL;
         }
     });
 
+    bot.catch((err) => {
+        const ctx = err.ctx;
+        console.error(`[TELEGRAM ERROR] Erro no bot (Chat ID: ${ctx.chat?.id}):`, err.message);
+        if (err.message.includes('getaddrinfo') || err.message.includes('Network request failed')) {
+            console.log('[TELEGRAM] Erro de rede detectado. Tentando manter o bot ativo...');
+        }
+    });
+
     console.log('[TELEGRAM] Bot C2 Inicializado, aguardando comandos.');
     
     // ✅ CORREÇÃO: Apenas UM modo de recebimento (NUNCA ambos)
-    if (IS_CLOUD && process.env.RENDER_EXTERNAL_URL) {
+    if (IS_CLOUD && process.env.PUBLIC_URL) {
         // NUVEM: Apenas Webhook
         console.log('[TELEGRAM] Modo: Webhook (Nuvem)');
-        const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/telegram-webhook`;
+        const webhookUrl = `${process.env.PUBLIC_URL}/telegram-webhook`;
         
         // Remove polling primeiro
         bot.api.deleteWebhook({ drop_pending_updates: true })
@@ -1221,8 +1417,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
             .then(() => console.log(`[TELEGRAM] Webhook configurado: ${webhookUrl}`))
             .catch(err => console.error('[TELEGRAM] Erro webhook:', err.message));
         
-        app.post('/telegram-webhook', (req, res) => {
-            bot.processUpdate(req.body);
+        app.post('/telegram-webhook', async (req, res) => {
+            await bot.handleUpdate(req.body);
             res.send('OK');
         });
     } else {

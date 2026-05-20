@@ -1,14 +1,9 @@
 services:
   - type: web
     name: alma-omni-brain
-    runtime: node
+    runtime: docker
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
     envVars:
-      - key: NODE_VERSION
-        value: 20.11.0
       - key: CLOUD_MODE
         value: "true"
       - key: TELEGRAM_BOT_TOKEN
@@ -23,6 +18,5 @@ services:
         sync: false
       - key: API_SECRET
         sync: false
-      - key: RENDER_EXTERNAL_URL
+      - key: PUBLIC_URL
         sync: false
-      

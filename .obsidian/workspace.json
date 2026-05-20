@@ -11,12 +11,13 @@
             "id": "e0a32649cceacba8",
             "type": "leaf",
             "state": {
-              "type": "image",
+              "type": "bases",
               "state": {
-                "file": "public/alma_omni_brain_concept_1778379422344.png"
+                "file": "Sem título.base",
+                "viewName": "Tabela"
               },
-              "icon": "lucide-image",
-              "title": "alma_omni_brain_concept_1778379422344"
+              "icon": "lucide-table",
+              "title": "Sem título"
             }
           }
         ]
@@ -178,31 +179,33 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "e0a32649cceacba8",
+  "active": "60c83f056590114d",
   "lastOpenFiles": [
-    "check_db.cjs",
-    "alma/jarvis_speech.mp3",
-    "node_modules/jose/README.md",
-    "Sem título 3.canvas",
-    "Sem título 2.canvas",
-    "Sem título 1.canvas",
-    "Sem título 1.base",
-    "Sem título.canvas",
-    "Sem título.base",
+    "Dockerfile",
+    "src/tmp_audio_1779231844769.ogg",
+    "src/tmp_audio_1779231831110.ogg",
+    "src/tmp_audio_1779231816556.ogg",
+    "src/tmp_audio_1779231799980.ogg",
+    "src/tmp_audio_1779231686318.ogg",
+    "src/tmp_audio_1779231475253.ogg",
+    "src/tmp_audio_1779231439705.ogg",
+    "src/tmp_audio_1779231410913.ogg",
+    "src/tmp_audio_1779231404346.ogg",
     "Manual_Ecocistema.md",
-    "print.png",
-    "src/tmp_audio_1778934941492.ogg",
-    "node_modules/@grammyjs/types/README.md",
+    "2026-05-17.md",
+    "public/alma_omni_brain_concept_1778379422344.png",
     "ALMA Notes/Teste_Obsidian.md",
     "ALMA Notes/Roadmap_ALMA.md",
     "ALMA Notes/Diario_Progresso_2026-05-17.md",
     "ALMA Notes/Arquitetura_do_Sistema_ALMA.md",
-    "2026-05-17.md",
-    "test_search.js",
-    "generate_embeddings.js",
-    "check_index.js",
-    "node_modules/negotiator/README.md",
-    "src/tmp_audio_1778860594833.ogg",
-    "src/tmp_audio_1778860577781.ogg"
+    "src/tmp_audio_1779231236750.ogg",
+    "node_modules/jose/README.md",
+    "Sem título 3.canvas",
+    "Sem título 2.canvas",
+    "Sem título 1.canvas",
+    "Sem título.canvas",
+    "print.png",
+    "node_modules/@grammyjs/types/README.md",
+    "node_modules/negotiator/README.md"
   ]
 }

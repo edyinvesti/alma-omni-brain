@@ -22,6 +22,7 @@ class AlmaListener:
                 # Testa se há dispositivo de entrada
                 devices = sd.query_devices(kind='input')
                 if devices:
+                    self.microphone = sr.Microphone()
                     self.has_mic = True
                     print(f"[VOZ] Microfone OK (sounddevice): {devices['name']}")
             except Exception as e:

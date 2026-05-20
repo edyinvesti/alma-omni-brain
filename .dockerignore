@@ -1,0 +1,10 @@
+node_modules/
+.git/
+.env
+.env.*
+*.log
+.obsidian/
+ALMA Notes/
+backups/
+telemetry.db
+.DS_Store
