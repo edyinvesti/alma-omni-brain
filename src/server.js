@@ -1035,7 +1035,7 @@ async function sendTelegramVoice(chatId, text) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     input: { text: text.substring(0, 1000) },
-                    voice: { languageCode: 'pt-BR', name: 'pt-BR-Neural2-J' },
+                    voice: { languageCode: 'pt-BR', name: 'pt-BR-Wavenet-B' },
                     audioConfig: { audioEncoding: 'LINEAR16', speakingRate: 1.0 }
                 })
             });
@@ -1188,6 +1188,41 @@ if (bot) {
             await ctx.reply(`💰 *Conversões (Laed Suplementos)*\nVendas: ${count}\nReceita Estimada: R$ ${estimate},00`, { parse_mode: 'Markdown' });
         } catch (err) {
             await ctx.reply("❌ Erro ao consultar vendas no banco neural.");
+        }
+    });
+
+    // === RESPONDER MENSAGENS NORMAIS (NÃO COMANDOS) ===
+    bot.on('message:text', async (ctx) => {
+        const msg = ctx.message;
+        
+        // Ignora comandos
+        if (msg.text && msg.text.startsWith('/')) return;
+        
+        // Verifica se é admin
+        if (String(msg.chat.id) !== String(adminChatId)) {
+            console.log(`[TELEGRAM] Bloqueado: ID ${msg.chat.id} não é admin`);
+            return;
+        }
+
+        const text = msg.text.trim();
+        console.log(`[TELEGRAM] Mensagem normal: "${text}"`);
+
+        try {
+            // Carrega contexto
+            const context = await buildContext();
+            
+            // Pergunta para a IA
+            const response = await askAlmaBrain(text, context);
+            
+            // Limpa ações da resposta
+            const cleanedResponse = response.replace(/\[\[ACTION:[^\]]+\]\]/g, '').trim();
+            
+            // Responde no Telegram
+            await ctx.reply(cleanedResponse || "Entendido!");
+            
+        } catch (err) {
+            console.error("[TELEGRAM] Erro ao processar mensagem:", err.message);
+            await ctx.reply("Desculpe, tive um erro ao processar sua mensagem.");
         }
     });
 
@@ -1663,7 +1698,6 @@ const hermesBaseUrl = process.env.HERMES_URL;
         console.log('[TELEGRAM] Modo: Webhook (Nuvem)');
         const webhookUrl = `${process.env.PUBLIC_URL}/telegram-webhook`;
         
-        // Remove polling primeiro
         bot.api.deleteWebhook({ drop_pending_updates: true })
             .then(() => bot.setWebhook(webhookUrl))
             .then(() => console.log(`[TELEGRAM] Webhook configurado: ${webhookUrl}`))
@@ -1673,15 +1707,17 @@ const hermesBaseUrl = process.env.HERMES_URL;
             await bot.handleUpdate(req.body);
             res.send('OK');
         });
-    } else {
-        // LOCAL: Apenas Polling
+    } else if (!IS_CLOUD) {
+        // LOCAL: Polling apenas se NÃO estiver na nuvem
         console.log('[TELEGRAM] Modo: Polling (Local)');
         bot.api.deleteWebhook({ drop_pending_updates: true })
             .then(() => bot.start())
             .catch(err => {
-                console.log('[TELEGRAM] Usando polling direto');
+                console.log('[TELEGRAM] Usando polling direto...');
                 bot.start();
             });
+    } else {
+        console.warn('[TELEGRAM] Instância em Nuvem aguardando configuração de PUBLIC_URL. Polling desativado para evitar conflito.');
     }
 } else {
     console.log('[TELEGRAM] Aviso: Token não configurado no .env. Alertas desativados.');
