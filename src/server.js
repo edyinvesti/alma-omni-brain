@@ -1153,20 +1153,28 @@ const hermesBaseUrl = process.env.HERMES_URL;
             }).catch(e => bot.api.sendMessage(msg.chat.id, `❌ Hermes offline ou erro de rede: ${e.message}`).catch(err=>console.error(err)));
         };
 
-        if (command) {
-            console.log(`[LOCAL] Executando: ${command}`);
-            bot.api.sendMessage(msg.chat.id, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
-                .catch(err => console.error("ERRO CRITICO TELEGRAM:", err.message));
+        if (command && command.startsWith('/api/')) {
+             hermesEndpoint = command;
+             command = null;
+        }
 
-            const sanitizedCmd = sanitizeCommand(command);
-            const execCmd = process.platform === 'win32' ? `powershell -command "${sanitizedCmd}"` : sanitizedCmd;
-            exec(execCmd, (error, stdout) => {
-                if (error) {
-                    bot.api.sendMessage(msg.chat.id, `❌ Falha: ${error.message}`).catch(e => console.error("Erro feedback falha:", e));
-                } else {
-                    bot.api.sendMessage(msg.chat.id, `✅ *Concluído!* Ação executada com sucesso no seu PC.`, {parse_mode:'Markdown'}).catch(e => console.error("Erro feedback sucesso:", e));
-                }
-            });
+        if (command || hermesEndpoint) {
+            if (hermesEndpoint) {
+                sendToHermes(hermesEndpoint, hermesPayload || {}, target || 'Ação');
+            } else if (IS_CLOUD) {
+                sendToHermes('/api/hermes/exec', { command: command }, action === 'search' ? `Pesquisando ${target}` : `Abrindo ${target}`);
+            } else {
+                console.log(`[LOCAL] Executando: ${command}`);
+                bot.api.sendMessage(msg.chat.id, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
+                    .catch(e => console.error("ERRO:", e.message));
+
+                const sanitizedCmd = sanitizeCommand(command);
+                const execCmd = process.platform === 'win32' ? `powershell -command "${sanitizedCmd}"` : sanitizedCmd;
+                exec(execCmd, (error) => {
+                    if (error) bot.api.sendMessage(msg.chat.id, `❌ Falha: ${error.message}`).catch(e=>{});
+                    else bot.api.sendMessage(msg.chat.id, `✅ *Concluído!* no PC.`, {parse_mode:'Markdown'}).catch(e=>{});
+                });
+            }
         } else {
             // Se não for um comando direto, Alma pensa e responde com o Contexto Omni
             bot.api.sendChatAction(msg.chat.id, 'typing').catch(e => console.error("Erro typing:", e));
@@ -1301,20 +1309,28 @@ const hermesBaseUrl = process.env.HERMES_URL;
             }).catch(e => bot.api.sendMessage(chatId, `❌ Hermes offline ou erro de rede: ${e.message}`).catch(err=>console.error(err)));
         };
 
-        if (command) {
-            console.log(`[LOCAL VOZ] Executando: ${command}`);
-            bot.api.sendMessage(chatId, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
-                .catch(e => console.error("Erro feedback voz", e));
+        if (command && command.startsWith('/api/')) {
+             hermesEndpoint = command;
+             command = null;
+        }
 
-            const sanitizedCmdVoz = sanitizeCommand(command);
-            const execCmdVoz = process.platform === 'win32' ? `powershell -command "${sanitizedCmdVoz}"` : sanitizedCmdVoz;
-            exec(execCmdVoz, (err) => {
-                if (err) {
-                    bot.api.sendMessage(chatId, `❌ Falha: ${err.message}`).catch(e => console.error("Erro falha exec", e));
-                } else {
-                    bot.api.sendMessage(chatId, `✅ *Concluído!* ${target || 'Comando'} executado no seu PC.`, {parse_mode:'Markdown'}).catch(e => console.error("Erro sucesso exec", e));
-                }
-            });
+        if (command || hermesEndpoint) {
+            if (hermesEndpoint) {
+                sendToHermesVoz(hermesEndpoint, hermesPayload || {}, target || 'Ação');
+            } else if (IS_CLOUD) {
+                sendToHermesVoz('/api/hermes/exec', { command: command }, action === 'search' ? `Pesquisando ${target}` : `Abrindo ${target}`);
+            } else {
+                console.log(`[LOCAL VOZ] Executando: ${command}`);
+                bot.api.sendMessage(chatId, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
+                    .catch(e => console.error("Erro feedback", e));
+
+                const sanitizedCmdVoz = sanitizeCommand(command);
+                const execCmdVoz = process.platform === 'win32' ? `powershell -command "${sanitizedCmdVoz}"` : sanitizedCmdVoz;
+                exec(execCmdVoz, (err) => {
+                    if (err) bot.api.sendMessage(chatId, `❌ Falha: ${err.message}`).catch(e=>{});
+                    else bot.api.sendMessage(chatId, `✅ *Concluído!* no PC.`, {parse_mode:'Markdown'}).catch(e=>{});
+                });
+            }
         } else {
             // Resposta inteligente via AI com o Contexto Omni
             bot.api.sendChatAction(chatId, 'typing').catch(e => console.error("Erro typing voz", e));
