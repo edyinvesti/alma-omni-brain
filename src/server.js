@@ -1285,8 +1285,11 @@ if (bot) {
             // Limpa ações da resposta
             const cleanedResponse = response.replace(/\[\[ACTION:[^\]]+\]\]/g, '').trim();
             
-            // Responde no Telegram
+            // Responde no Telegram (Texto + Voz)
             await ctx.reply(cleanedResponse || "Entendido!");
+            if (cleanedResponse) {
+                await sendTelegramVoice(ctx.chat.id, cleanedResponse);
+            }
             
         } catch (err) {
             console.error("[TELEGRAM] Erro ao processar mensagem:", err.message);
