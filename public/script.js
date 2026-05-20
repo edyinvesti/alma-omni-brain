@@ -505,26 +505,52 @@ function parseColorToRgba(color, alpha = 0.3) {
     return `rgba(0,255,157,${alpha})`;
 }
 
-function speak(text, shouldRestart = true) {
+async function speak(text, shouldRestart = true) {
+    if (!text) return;
+    
+    try {
+        // Tentamos a voz premium via Backend (ElevenLabs / Google)
+        const audioUrl = `${CORE_TELEMETRY_URL}/api/voice?text=${encodeURIComponent(text)}`;
+        const response = await fetch(audioUrl);
+        
+        if (response.ok && response.status === 200) {
+            const audioData = await response.blob();
+            const url = URL.createObjectURL(audioData);
+            const audio = new Audio(url);
+            
+            audio.onended = () => {
+                URL.revokeObjectURL(url);
+                if (shouldRestart) handleVoiceRestart();
+            };
+            
+            await audio.play();
+            return;
+        }
+    } catch (e) {
+        console.warn("[VOICE] Falha no streaming premium, usando voz local do navegador.");
+    }
+
+    // FALLBACK: Voz local do navegador (SpeechSynthesis)
     if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'pt-BR';
     u.rate = 1.0;
     u.pitch = 0.8;
     
-    // Auto-restart da escuta após terminar de falar (apenas para respostas da IA)
-    // Só reinicia se o microfone NÃO estiver ativo e não houver reconhecimento em andamento
-    if (shouldRestart && !micActive && (!recognition || recognition.state !== 'listening')) {
-        u.onend = () => {
-            setTimeout(() => {
-                if (!micActive && (!recognition || recognition.state !== 'listening')) {
-                    triggerVoice();
-                }
-            }, 300);
-        };
+    if (shouldRestart) {
+        u.onend = () => handleVoiceRestart();
     }
-    
     window.speechSynthesis.speak(u);
+}
+
+function handleVoiceRestart() {
+    if (!micActive && (!recognition || recognition.state !== 'listening')) {
+        setTimeout(() => {
+            if (!micActive && (!recognition || recognition.state !== 'listening')) {
+                triggerVoice();
+            }
+        }, 300);
+    }
 }
 
 function initCharts() {

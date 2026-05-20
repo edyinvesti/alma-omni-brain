@@ -481,13 +481,59 @@ app.get('/api/iamobil/stats', async (req, res) => {
 });
 
 // FIX 5: Endpoint para recarregar logs recentes ao reconectar
-app.get('/api/logs-recent', securityMiddleware, async (req, res) => {
-    try {
-        const result = await dbExecute('SELECT source, message, timestamp FROM logs ORDER BY id DESC LIMIT 20');
-        res.json({ logs: result.rows });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+// GET /api/voice: Gera áudio e envia para o Dashboard (Streaming)
+app.get('/api/voice', async (req, res) => {
+    const text = req.query.text;
+    if (!text) return res.status(400).send('Text required');
+
+    const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
+    const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
+    
+    // 1️⃣ Tentamos ElevenLabs primeiro (Streaming Buffer)
+    if (ELEVENLABS_KEY) {
+        try {
+            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
+                method: 'POST',
+                headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': ELEVENLABS_KEY },
+                body: JSON.stringify({
+                    text: text.substring(0, 1000),
+                    model_id: 'eleven_multilingual_v2',
+                    voice_settings: { stability: 0.5, similarity_boost: 0.8 }
+                })
+            });
+
+            if (response.ok) {
+                const buffer = Buffer.from(await response.arrayBuffer());
+                res.set('Content-Type', 'audio/mpeg');
+                return res.send(buffer);
+            }
+        } catch (e) { console.error("[VOICE API] ElevenLabs falhou:", e.message); }
     }
+
+    // 2️⃣ Fallback: Google Cloud TTS (se configurado)
+    if (GOOGLE_TTS_KEY) {
+        try {
+            const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    input: { text },
+                    voice: { languageCode: 'pt-BR', name: 'pt-BR-Wavenet-C' },
+                    audioConfig: { audioEncoding: 'MP3' }
+                })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const buffer = Buffer.from(data.audioContent, 'base64');
+                res.set('Content-Type', 'audio/mpeg');
+                return res.send(buffer);
+            }
+        } catch (e) { console.error("[VOICE API] Google TTS falhou"); }
+    }
+
+    // 3️⃣ Ultra Fallback: Se tudo falhar, avisamos para o front-end usar a voz local do navegador
+    res.status(204).send(); // No Content = Use local TTS
 });
 
 app.post('/api/telegram/send-photo', securityMiddleware, async (req, res) => {
