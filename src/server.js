@@ -490,17 +490,31 @@ app.get('/api/voice', async (req, res) => {
     const HF_KEY = process.env.HF_API_KEY;
     if (HF_KEY) {
         try {
+            console.log('[VOICE API] Tentando HuggingFace...');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+
             const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputs: text.substring(0, 500) })
+                body: JSON.stringify({ inputs: text.substring(0, 500) }),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
+
             if (hfRes.ok) {
                 const buffer = Buffer.from(await hfRes.arrayBuffer());
-                res.set('Content-Type', 'audio/mpeg');
-                return res.send(buffer);
+                if (buffer.length > 100) {
+                    res.set('Content-Type', 'audio/mpeg');
+                    return res.send(buffer);
+                }
+            } else {
+                console.warn(`[VOICE API] HF Status: ${hfRes.status}`);
             }
-        } catch (e) { console.error("[VOICE API] HF TTS falhou"); }
+        } catch (e) { 
+            console.error("[VOICE API] HF TTS falhou ou timeout:", e.message); 
+        }
     }
 
     const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
@@ -987,24 +1001,34 @@ async function sendTelegramVoice(chatId, text) {
     if (HF_KEY && !audioSent) {
         try {
             console.log('[TTS] Tentando HuggingFace (MMS-TTS)...');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+
             const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputs: text.substring(0, 500) })
+                body: JSON.stringify({ inputs: text.substring(0, 500) }),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
 
             if (hfRes.ok) {
                 const buffer = Buffer.from(await hfRes.arrayBuffer());
-                fs.writeFileSync(tempWav, buffer);
-                await bot.api.sendVoice(chatId, new InputFile(tempWav));
-                fs.unlinkSync(tempWav);
-                console.log('[TTS] ✅ HuggingFace sucesso!');
-                audioSent = true;
+                if (buffer.length > 500) {
+                    fs.writeFileSync(tempWav, buffer);
+                    await bot.api.sendVoice(chatId, new InputFile(tempWav));
+                    fs.unlinkSync(tempWav);
+                    console.log('[TTS] ✅ HuggingFace sucesso!');
+                    audioSent = true;
+                } else {
+                    console.log('[TTS] HuggingFace retornou buffer muito pequeno (possível erro)');
+                }
             } else {
-                console.log(`[TTS] HuggingFace retornou status ${hfRes.status}`);
+                console.log(`[TTS] HuggingFace retornou status ${hfRes.status} (Provável carregamento)`);
             }
         } catch (err) {
-            console.log('[TTS] HuggingFace falhou:', err.message);
+            console.log('[TTS] HuggingFace falhou ou timeout:', err.message);
         }
     }
 
