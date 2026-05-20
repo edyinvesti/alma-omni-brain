@@ -874,11 +874,32 @@ async function askAlmaBrain(prompt, context = "") {
 }
 
 async function sendTelegramVoice(chatId, text) {
-    if (!bot || !chatId) return;
+    if (!bot || !chatId || !text) return;
+
+    // MODO HÍBRIDO: Se estiver na nuvem, pede para o Hermes local gerar e enviar a voz
+    if (IS_CLOUD) {
+        const hermesBaseUrlVoz = process.env.HERMES_URL;
+        const hermesApiKeyVoz = process.env.HERMES_API_KEY;
+        
+        if (hermesBaseUrlVoz && hermesApiKeyVoz) {
+            console.log(`[TTS CLOUD] Solicitando geração de voz ao Hermes local...`);
+            fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${hermesApiKeyVoz}`
+                },
+                body: JSON.stringify({ text, chat_id: chatId })
+            }).then(r => r.json()).then(data => {
+                if (data.status !== 'success') console.error("[TTS CLOUD] Erro no Hermes:", data.message);
+            }).catch(e => console.error("[TTS CLOUD] Hermes offline:", e.message));
+            return;
+        }
+    }
+
+    // MODO LOCAL: Gera áudio no Windows usando PowerShell (legado/local)
     const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
-    
     try {
-        // Gera áudio no Windows usando PowerShell
         const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
         const psCommand = `PowerShell -Command "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${tempWav}'); $s.Speak('${sanitized}'); $s.Dispose()"`;
         
@@ -894,7 +915,7 @@ async function sendTelegramVoice(chatId, text) {
             fs.unlinkSync(tempWav);
         }
     } catch (err) {
-        console.error("[TELEGRAM TTS] Erro:", err.message);
+        console.error("[TELEGRAM TTS] Erro local:", err.message);
     }
 }
 
@@ -928,30 +949,7 @@ async function transcribeAudio(audioPath) {
     });
 }
 
-async function sendTelegramVoice(chatId, text) {
-    if (!bot || !chatId) return;
-    const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
-    
-    try {
-        // Gera áudio no Windows usando PowerShell
-        const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
-        const psCommand = `PowerShell -Command "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${tempWav}'); $s.Speak('${sanitized}'); $s.Dispose()"`;
-        
-        await new Promise((resolve, reject) => {
-            exec(psCommand, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
-
-        if (fs.existsSync(tempWav)) {
-            await bot.api.sendVoice(chatId, new InputFile(tempWav));
-            fs.unlinkSync(tempWav);
-        }
-    } catch (err) {
-        console.error("[TELEGRAM TTS] Erro:", err.message);
-    }
-}
+// Transcrever áudio via Groq Whisper
 
 
 io.on('connection', (socket) => {
