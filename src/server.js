@@ -1692,12 +1692,10 @@ const hermesBaseUrl = process.env.HERMES_URL;
 
     console.log('[TELEGRAM] Bot C2 Inicializado, aguardando comandos.');
     
-    // ✅ CORREÇÃO: Apenas UM modo de recebimento (NUNCA ambos)
+    // ✅ EXCLUSIVIDADE: Garante que apenas UMA instância faça polling de cada vez
     if (IS_CLOUD && process.env.PUBLIC_URL) {
-        // NUVEM: Apenas Webhook
         console.log('[TELEGRAM] Modo: Webhook (Nuvem)');
         const webhookUrl = `${process.env.PUBLIC_URL}/telegram-webhook`;
-        
         bot.api.deleteWebhook({ drop_pending_updates: true })
             .then(() => bot.setWebhook(webhookUrl))
             .then(() => console.log(`[TELEGRAM] Webhook configurado: ${webhookUrl}`))
@@ -1707,17 +1705,20 @@ const hermesBaseUrl = process.env.HERMES_URL;
             await bot.handleUpdate(req.body);
             res.send('OK');
         });
-    } else if (!IS_CLOUD) {
-        // LOCAL: Polling apenas se NÃO estiver na nuvem
-        console.log('[TELEGRAM] Modo: Polling (Local)');
+    } else if (!IS_CLOUD || process.env.FORCE_POLLING === 'true') {
+        // LOCAL ou FORÇADO: Polling
+        console.log('[TELEGRAM] Modo: Polling (Ativo)');
         bot.api.deleteWebhook({ drop_pending_updates: true })
             .then(() => bot.start())
             .catch(err => {
-                console.log('[TELEGRAM] Usando polling direto...');
-                bot.start();
+                if (err.description && err.description.includes('Conflict')) {
+                    console.error('[TELEGRAM] ⚠️ CONFLITO DETECTADO: Outra instância já está rodando.');
+                } else {
+                    bot.start(); // Tenta novamente se for erro de rede
+                }
             });
     } else {
-        console.warn('[TELEGRAM] Instância em Nuvem aguardando configuração de PUBLIC_URL. Polling desativado para evitar conflito.');
+        console.log('[TELEGRAM] Instância em Nuvem detectada. Polling desativado para evitar conflito com Local PC.');
     }
 } else {
     console.log('[TELEGRAM] Aviso: Token não configurado no .env. Alertas desativados.');
