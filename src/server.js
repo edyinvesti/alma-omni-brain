@@ -887,7 +887,8 @@ async function sendTelegramVoice(chatId, text) {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${hermesApiKeyVoz}`
+                    'Authorization': `Bearer ${hermesApiKeyVoz}`,
+                    'Bypass-Tunnel-Reminder': 'true'
                 },
                 body: JSON.stringify({ text, chat_id: chatId })
             }).then(r => r.json()).then(data => {
@@ -1171,7 +1172,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${hermesApiKey}`
+                    'Authorization': `Bearer ${hermesApiKey}`,
+                    'Bypass-Tunnel-Reminder': 'true'
                 },
                 body: JSON.stringify(payload)
             }).then(r => r.json()).then(data => {
@@ -1328,7 +1330,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${hermesApiKeyVoz}`
+                    'Authorization': `Bearer ${hermesApiKeyVoz}`,
+                    'Bypass-Tunnel-Reminder': 'true'
                 },
                 body: JSON.stringify(payload)
             }).then(r => r.json()).then(data => {
