@@ -879,47 +879,156 @@ async function askAlmaBrain(prompt, context = "") {
 async function sendTelegramVoice(chatId, text) {
     if (!bot || !chatId || !text) return;
 
-    // MODO HÍBRIDO: Se estiver na nuvem, pede para o Hermes local gerar e enviar a voz
+    // --- MODO HÍBRIDO (Hermes Local) ---
+    // Sempre tentamos o Hermes primeiro se estiver na nuvem, para economizar créditos de API
     if (IS_CLOUD) {
         const hermesBaseUrlVoz = process.env.HERMES_URL;
         const hermesApiKeyVoz = process.env.HERMES_API_KEY;
         
         if (hermesBaseUrlVoz && hermesApiKeyVoz) {
-            console.log(`[TTS CLOUD] Solicitando geração de voz ao Hermes local...`);
-            fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${hermesApiKeyVoz}`,
-                    'Bypass-Tunnel-Reminder': 'true'
-                },
-                body: JSON.stringify({ text, chat_id: chatId })
-            }).then(r => r.json()).then(data => {
-                if (data.status !== 'success') console.error("[TTS CLOUD] Erro no Hermes:", data.message);
-            }).catch(e => console.error("[TTS CLOUD] Hermes offline:", e.message));
-            return;
+            console.log(`[TTS CLOUD] Solicitando voz ao Hermes local...`);
+            try {
+                const hRes = await fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${hermesApiKeyVoz}`,
+                        'Bypass-Tunnel-Reminder': 'true'
+                    },
+                    body: JSON.stringify({ text, chat_id: chatId })
+                });
+                const hData = await hRes.json();
+                if (hData.status === 'success') return; // Sucesso!
+            } catch (e) {
+                console.warn("[TTS CLOUD] Hermes Offline ou Erro, tentando fallbacks de API...");
+            }
         }
     }
 
-    // MODO LOCAL: Gera áudio no Windows usando PowerShell (legado/local)
-    const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
-    try {
-        const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
-        const psCommand = `PowerShell -Command "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${tempWav}'); $s.Speak('${sanitized}'); $s.Dispose()"`;
-        
-        await new Promise((resolve, reject) => {
-            exec(psCommand, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+    const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
+    const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
+    const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
 
-        if (fs.existsSync(tempWav)) {
-            await bot.api.sendVoice(chatId, new InputFile(tempWav));
-            fs.unlinkSync(tempWav);
+    const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
+    let audioSent = false;
+
+    // ========== TTS FALLBACK SYSTEM ==========
+
+    // 1️⃣ ElevenLabs (mais natural)
+    if (ELEVENLABS_KEY && !audioSent) {
+        try {
+            console.log('[TTS] Tentando ElevenLabs...');
+            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/rachel', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'audio/mpeg',
+                    'Content-Type': 'application/json',
+                    'xi-api-key': ELEVENLABS_KEY
+                },
+                body: JSON.stringify({
+                    text: text.substring(0, 1000),
+                    model_id: 'eleven_multilingual_v2',
+                    voice_settings: { stability: 0.5, similarity_boost: 0.8 }
+                })
+            });
+
+            if (response.ok) {
+                const buffer = Buffer.from(await response.arrayBuffer());
+                fs.writeFileSync(tempWav, buffer);
+                await bot.api.sendVoice(chatId, new InputFile(tempWav));
+                fs.unlinkSync(tempWav);
+                console.log('[TTS] ✅ ElevenLabs sucesso!');
+                audioSent = true;
+            }
+        } catch (err) {
+            console.log('[TTS] ElevenLabs falhou:', err.message);
         }
-    } catch (err) {
-        console.error("[TELEGRAM TTS] Erro local:", err.message);
+    }
+
+    // 2️⃣ Google Cloud TTS
+    if (GOOGLE_TTS_KEY && !audioSent) {
+        try {
+            console.log('[TTS] Tentando Google Cloud TTS...');
+            const googleUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
+            const googleRes = await fetch(googleUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    input: { text: text.substring(0, 1000) },
+                    voice: { languageCode: 'pt-BR', name: 'pt-BR-Neural2-J' },
+                    audioConfig: { audioEncoding: 'LINEAR16', speakingRate: 1.0 }
+                })
+            });
+
+            const googleData = await googleRes.json();
+            if (googleData.audioContent) {
+                const buffer = Buffer.from(googleData.audioContent, 'base64');
+                fs.writeFileSync(tempWav, buffer);
+                await bot.api.sendVoice(chatId, new InputFile(tempWav));
+                fs.unlinkSync(tempWav);
+                console.log('[TTS] ✅ Google TTS sucesso!');
+                audioSent = true;
+            }
+        } catch (err) {
+            console.log('[TTS] Google TTS falhou:', err.message);
+        }
+    }
+
+    // 3️⃣ Azure Speech
+    if (AZURE_SPEECH_KEY && !audioSent) {
+        try {
+            console.log('[TTS] Tentando Azure Speech...');
+            const azureTokenRes = await fetch('https://brazilsouth.api.cognitive.microsoft.com/sts/v1.0/issueToken', {
+                method: 'POST',
+                headers: { 'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY }
+            });
+            const azureToken = await azureTokenRes.text();
+
+            const azureRes = await fetch('https://brazilsouth.tts.speech.microsoft.com/cognitiveservices/v1', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${azureToken}`,
+                    'Content-Type': 'application/ssml+xml',
+                    'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3'
+                },
+                body: `<speak version='1.0' xml:lang='pt-BR'><voice name='pt-BR-FranciscaNeural'>${text.substring(0, 1000)}</voice></speak>`
+            });
+
+            if (azureRes.ok) {
+                const buffer = Buffer.from(await azureRes.arrayBuffer());
+                fs.writeFileSync(tempWav + '.mp3', buffer);
+                await bot.api.sendVoice(chatId, new InputFile(tempWav + '.mp3'));
+                fs.unlinkSync(tempWav + '.mp3');
+                console.log('[TTS] ✅ Azure Speech sucesso!');
+                audioSent = true;
+            }
+        } catch (err) {
+            console.log('[TTS] Azure Speech falhou:', err.message);
+        }
+    }
+
+    // 4️⃣ Fallback: Windows TTS Local (sempre funciona)
+    if (!audioSent) {
+        try {
+            console.log('[TTS] Usando Windows TTS (fallback)...');
+            const sanitized = text.replace(/'/g, "''").replace(/"/g, '\"');
+            const psCommand = `PowerShell -Command "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${tempWav}'); $s.Speak('${sanitized}'); $s.Dispose()"`;
+
+            await new Promise((resolve, reject) => {
+                exec(psCommand, (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+
+            if (fs.existsSync(tempWav)) {
+                await bot.api.sendVoice(chatId, new InputFile(tempWav));
+                fs.unlinkSync(tempWav);
+                console.log('[TTS] ✅ Windows TTS sucesso!');
+            }
+        } catch (err) {
+            console.error('[TTS] Erro no fallback:', err.message);
+        }
     }
 }
 
