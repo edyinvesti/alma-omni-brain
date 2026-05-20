@@ -918,7 +918,8 @@ async function sendTelegramVoice(chatId, text) {
     if (ELEVENLABS_KEY && !audioSent) {
         try {
             console.log('[TTS] Tentando ElevenLabs...');
-            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/rachel', {
+            // Rachel Voice ID: 21m00Tcm4TlvDq8ikWAM
+            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
                 method: 'POST',
                 headers: {
                     'Accept': 'audio/mpeg',
@@ -939,9 +940,12 @@ async function sendTelegramVoice(chatId, text) {
                 fs.unlinkSync(tempWav);
                 console.log('[TTS] ✅ ElevenLabs sucesso!');
                 audioSent = true;
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                console.warn(`[TTS] ElevenLabs recusou (Status ${response.status}):`, errData.detail || response.statusText);
             }
         } catch (err) {
-            console.log('[TTS] ElevenLabs falhou:', err.message);
+            console.log('[TTS] ElevenLabs erro de conexão:', err.message);
         }
     }
 
