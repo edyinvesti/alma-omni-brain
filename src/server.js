@@ -1162,7 +1162,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
             if (hermesEndpoint) {
                 sendToHermes(hermesEndpoint, hermesPayload || {}, target || 'Ação');
             } else if (IS_CLOUD) {
-                sendToHermes('/api/hermes/exec', { command: command }, action === 'search' ? `Pesquisando ${target}` : `Abrindo ${target}`);
+                const cloudCmd = command.startsWith('Start-Process') ? `powershell -windowstyle hidden -command "${sanitizeCommand(command)}"` : command;
+                sendToHermes('/api/hermes/exec', { command: cloudCmd }, action === 'search' ? `Pesquisando ${target}` : `Abrindo ${target}`);
             } else {
                 console.log(`[LOCAL] Executando: ${command}`);
                 bot.api.sendMessage(msg.chat.id, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
@@ -1318,7 +1319,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
             if (hermesEndpoint) {
                 sendToHermesVoz(hermesEndpoint, hermesPayload || {}, target || 'Ação');
             } else if (IS_CLOUD) {
-                sendToHermesVoz('/api/hermes/exec', { command: command }, action === 'search' ? `Pesquisando ${target}` : `Abrindo ${target}`);
+                const cloudCmdVoz = command.startsWith('Start-Process') ? `powershell -windowstyle hidden -command "${sanitizeCommand(command)}"` : command;
+                sendToHermesVoz('/api/hermes/exec', { command: cloudCmdVoz }, action === 'search' ? `Pesquisando ${target}` : `Abrindo ${target}`);
             } else {
                 console.log(`[LOCAL VOZ] Executando: ${command}`);
                 bot.api.sendMessage(chatId, `⚡ *Shell:* ${action === 'search' ? `Pesquisando "${target}"` : `Abrindo ${target}`}...`, {parse_mode:'Markdown'})
