@@ -486,10 +486,27 @@ app.get('/api/voice', async (req, res) => {
     const text = req.query.text;
     if (!text) return res.status(400).send('Text required');
 
+    // 1️⃣ HuggingFace TTS (FREE - TESTE)
+    const HF_KEY = process.env.HF_API_KEY;
+    if (HF_KEY) {
+        try {
+            const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputs: text.substring(0, 500) })
+            });
+            if (hfRes.ok) {
+                const buffer = Buffer.from(await hfRes.arrayBuffer());
+                res.set('Content-Type', 'audio/mpeg');
+                return res.send(buffer);
+            }
+        } catch (e) { console.error("[VOICE API] HF TTS falhou"); }
+    }
+
     const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
     const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
     
-    // 1️⃣ Tentamos ElevenLabs primeiro (Streaming Buffer)
+    // 2️⃣ Tentamos ElevenLabs (Premium)
     if (ELEVENLABS_KEY) {
         try {
             const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
@@ -510,7 +527,7 @@ app.get('/api/voice', async (req, res) => {
         } catch (e) { console.error("[VOICE API] ElevenLabs falhou:", e.message); }
     }
 
-    // 2️⃣ Fallback: Google Cloud TTS (se configurado)
+    // 3️⃣ Fallback: Google Cloud TTS
     if (GOOGLE_TTS_KEY) {
         try {
             const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
@@ -532,24 +549,7 @@ app.get('/api/voice', async (req, res) => {
         } catch (e) { console.error("[VOICE API] Google TTS falhou"); }
     }
 
-    // 3️⃣ Fallback: HuggingFace TTS (FREE)
-    const HF_KEY = process.env.HF_API_KEY;
-    if (HF_KEY) {
-        try {
-            const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputs: text.substring(0, 500) })
-            });
-            if (hfRes.ok) {
-                const buffer = Buffer.from(await hfRes.arrayBuffer());
-                res.set('Content-Type', 'audio/mpeg');
-                return res.send(buffer);
-            }
-        } catch (e) { console.error("[VOICE API] HF TTS falhou"); }
-    }
-
-    // 4️⃣ Ultra Fallback: Se tudo falhar, avisamos para o front-end usar a voz local do navegador
+    // 4️⃣ Ultra Fallback: Voz local do navegador
     res.status(204).send(); // No Content = Use local TTS
 });
 
@@ -976,13 +976,39 @@ async function sendTelegramVoice(chatId, text) {
     const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
     const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
     const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
+    const HF_KEY = process.env.HF_API_KEY;
 
     const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
     let audioSent = false;
 
-    // ========== TTS MULTI-PROVIDER SYSTEM (Priority: ElevenLabs -> Hermes -> others) ==========
+    // ========== TTS MULTI-PROVIDER SYSTEM (Priority: HuggingFace -> ElevenLabs -> Google -> others) ==========
 
-    // 1️⃣ ElevenLabs (Premium - High Quality)
+    // 1️⃣ HuggingFace TTS (FREE - facebook/mms-tts-por)
+    if (HF_KEY && !audioSent) {
+        try {
+            console.log('[TTS] Tentando HuggingFace (MMS-TTS)...');
+            const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputs: text.substring(0, 500) })
+            });
+
+            if (hfRes.ok) {
+                const buffer = Buffer.from(await hfRes.arrayBuffer());
+                fs.writeFileSync(tempWav, buffer);
+                await bot.api.sendVoice(chatId, new InputFile(tempWav));
+                fs.unlinkSync(tempWav);
+                console.log('[TTS] ✅ HuggingFace sucesso!');
+                audioSent = true;
+            } else {
+                console.log(`[TTS] HuggingFace retornou status ${hfRes.status}`);
+            }
+        } catch (err) {
+            console.log('[TTS] HuggingFace falhou:', err.message);
+        }
+    }
+
+    // 2️⃣ ElevenLabs (Premium - High Quality)
     if (ELEVENLABS_KEY && !audioSent) {
         try {
             console.log('[TTS] Tentando ElevenLabs...');
@@ -1017,31 +1043,6 @@ async function sendTelegramVoice(chatId, text) {
         }
     }
 
-    // 2️⃣ MODO HÍBRIDO (Hermes Local - Free)
-    if (!audioSent && IS_CLOUD) {
-        const hermesBaseUrlVoz = process.env.HERMES_URL;
-        const hermesApiKeyVoz = process.env.HERMES_API_KEY;
-        
-        if (hermesBaseUrlVoz && hermesApiKeyVoz) {
-            console.log(`[TTS CLOUD] Solicitando voz ao Hermes local...`);
-            try {
-                const hRes = await fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${hermesApiKeyVoz}`,
-                        'Bypass-Tunnel-Reminder': 'true'
-                    },
-                    body: JSON.stringify({ text, chat_id: chatId })
-                });
-                const hData = await hRes.json();
-                if (hData.status === 'success') audioSent = true;
-            } catch (e) {
-                console.warn("[TTS CLOUD] Hermes Offline ou Erro, tentando outros fallbacks...");
-            }
-        }
-    }
-
     // 3️⃣ Google Cloud TTS
     if (GOOGLE_TTS_KEY && !audioSent) {
         try {
@@ -1071,7 +1072,32 @@ async function sendTelegramVoice(chatId, text) {
         }
     }
 
-    // 3️⃣ Azure Speech
+    // 4️⃣ MODO HÍBRIDO (Hermes Local - Free)
+    if (!audioSent && IS_CLOUD) {
+        const hermesBaseUrlVoz = process.env.HERMES_URL;
+        const hermesApiKeyVoz = process.env.HERMES_API_KEY;
+        
+        if (hermesBaseUrlVoz && hermesApiKeyVoz) {
+            console.log(`[TTS CLOUD] Solicitando voz ao Hermes local...`);
+            try {
+                const hRes = await fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${hermesApiKeyVoz}`,
+                        'Bypass-Tunnel-Reminder': 'true'
+                    },
+                    body: JSON.stringify({ text, chat_id: chatId })
+                });
+                const hData = await hRes.json();
+                if (hData.status === 'success') audioSent = true;
+            } catch (e) {
+                console.warn("[TTS CLOUD] Hermes Offline ou Erro, tentando outros fallbacks...");
+            }
+        }
+    }
+
+    // 5️⃣ Azure Speech
     if (AZURE_SPEECH_KEY && !audioSent) {
         try {
             console.log('[TTS] Tentando Azure Speech...');
@@ -1104,33 +1130,7 @@ async function sendTelegramVoice(chatId, text) {
         }
     }
 
-    // 4️⃣ HuggingFace TTS (FREE - facebook/mms-tts-por)
-    const HF_KEY = process.env.HF_API_KEY;
-    if (HF_KEY && !audioSent) {
-        try {
-            console.log('[TTS] Tentando HuggingFace (MMS-TTS)...');
-            const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputs: text.substring(0, 500) })
-            });
-
-            if (hfRes.ok) {
-                const buffer = Buffer.from(await hfRes.arrayBuffer());
-                fs.writeFileSync(tempWav, buffer);
-                await bot.api.sendVoice(chatId, new InputFile(tempWav));
-                fs.unlinkSync(tempWav);
-                console.log('[TTS] ✅ HuggingFace sucesso!');
-                audioSent = true;
-            } else {
-                console.log(`[TTS] HuggingFace retornou status ${hfRes.status}`);
-            }
-        } catch (err) {
-            console.log('[TTS] HuggingFace falhou:', err.message);
-        }
-    }
-
-    // 4️⃣ Fallback: Windows TTS Local (sempre funciona)
+    // 6️⃣ Fallback: Windows TTS Local (sempre funciona)
     if (!audioSent) {
         try {
             console.log('[TTS] Usando Windows TTS (fallback)...');
@@ -1157,6 +1157,7 @@ async function sendTelegramVoice(chatId, text) {
 
 // --- VOICE PROCESSING (STT / TTS) ---
 async function transcribeAudio(audioPath) {
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
     if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY não configurada");
     
     const form = new FormData();
