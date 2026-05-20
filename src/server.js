@@ -157,8 +157,8 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 // Detecta modo Nuvem
 const IS_CLOUD = process.env.CLOUD_MODE === 'true' || !!process.env.RENDER;
 
-const botToken = process.env.TELEGRAM_BOT_TOKEN ? process.env.TELEGRAM_BOT_TOKEN.trim() : undefined;
-const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID ? process.env.TELEGRAM_ADMIN_CHAT_ID.trim() : undefined;
+const botToken = (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TNOKE || "").trim();
+const adminChatId = (process.env.TELEGRAM_ADMIN_CHAT_ID || "").trim();
 let bot = null;
 
 if (!botToken || !adminChatId) {
@@ -1570,10 +1570,9 @@ const hermesBaseUrl = process.env.HERMES_URL;
 
     bot.catch((err) => {
         const ctx = err.ctx;
-        console.error(`[TELEGRAM ERROR] Erro no bot (Chat ID: ${ctx.chat?.id}):`, err.message);
-        if (err.message.includes('getaddrinfo') || err.message.includes('Network request failed')) {
-            console.log('[TELEGRAM] Erro de rede detectado. Tentando manter o bot ativo...');
-        }
+        const msgText = ctx?.message?.text || "Comando desconhecido";
+        console.error(`[TELEGRAM ERROR] Erro no bot:`, err.message);
+        if (ctx) ctx.reply(`⚠️ Ocorreu um erro ao processar sua solicitação.`).catch(() => {});
     });
 
     console.log('[TELEGRAM] Bot C2 Inicializado, aguardando comandos.');
