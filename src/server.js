@@ -532,7 +532,24 @@ app.get('/api/voice', async (req, res) => {
         } catch (e) { console.error("[VOICE API] Google TTS falhou"); }
     }
 
-    // 3️⃣ Ultra Fallback: Se tudo falhar, avisamos para o front-end usar a voz local do navegador
+    // 3️⃣ Fallback: HuggingFace TTS (FREE)
+    const HF_KEY = process.env.HF_API_KEY;
+    if (HF_KEY) {
+        try {
+            const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputs: text.substring(0, 500) })
+            });
+            if (hfRes.ok) {
+                const buffer = Buffer.from(await hfRes.arrayBuffer());
+                res.set('Content-Type', 'audio/mpeg');
+                return res.send(buffer);
+            }
+        } catch (e) { console.error("[VOICE API] HF TTS falhou"); }
+    }
+
+    // 4️⃣ Ultra Fallback: Se tudo falhar, avisamos para o front-end usar a voz local do navegador
     res.status(204).send(); // No Content = Use local TTS
 });
 
@@ -1087,6 +1104,32 @@ async function sendTelegramVoice(chatId, text) {
         }
     }
 
+    // 4️⃣ HuggingFace TTS (FREE - facebook/mms-tts-por)
+    const HF_KEY = process.env.HF_API_KEY;
+    if (HF_KEY && !audioSent) {
+        try {
+            console.log('[TTS] Tentando HuggingFace (MMS-TTS)...');
+            const hfRes = await fetch('https://api-inference.huggingface.co/models/facebook/mms-tts-por', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${HF_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputs: text.substring(0, 500) })
+            });
+
+            if (hfRes.ok) {
+                const buffer = Buffer.from(await hfRes.arrayBuffer());
+                fs.writeFileSync(tempWav, buffer);
+                await bot.api.sendVoice(chatId, new InputFile(tempWav));
+                fs.unlinkSync(tempWav);
+                console.log('[TTS] ✅ HuggingFace sucesso!');
+                audioSent = true;
+            } else {
+                console.log(`[TTS] HuggingFace retornou status ${hfRes.status}`);
+            }
+        } catch (err) {
+            console.log('[TTS] HuggingFace falhou:', err.message);
+        }
+    }
+
     // 4️⃣ Fallback: Windows TTS Local (sempre funciona)
     if (!audioSent) {
         try {
@@ -1209,7 +1252,7 @@ if (bot) {
 
         try {
             // Carrega contexto
-            const context = await buildContext();
+            const context = await getOmniContext(text);
             
             // Pergunta para a IA
             const response = await askAlmaBrain(text, context);
