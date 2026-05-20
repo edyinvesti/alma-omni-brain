@@ -922,7 +922,7 @@ async function sendTelegramVoice(chatId, text) {
                 audioSent = true;
             } else {
                 const errData = await response.json().catch(() => ({}));
-                console.warn(`[TTS] ElevenLabs recusou (Status ${response.status}):`, errData.detail || response.statusText);
+                console.error(`[TTS] ❌ ElevenLabs ERROR ${response.status}:`, JSON.stringify(errData, null, 2));
             }
         } catch (err) {
             console.log('[TTS] ElevenLabs erro de conexão:', err.message);
