@@ -560,7 +560,13 @@ async function handleMemoryActions(response) {
         console.log(`[AÇÕES] Detectadas ${actions.length} ações`);
         
         for (const action of actions) {
-            // ✅ Usa a nova fila de ações (não executa imediatamente)
+            // ✅ Ignoramos 'speak' aqui porque o fluxo principal do server.js já cuida da voz via Telegram
+            // para evitar áudio duplicado e loops de voz.
+            if (action.type === 'speak') {
+                console.log(`[AÇÕES] Ignorando skip redundante: ${action.target}`);
+                continue;
+            }
+            
             if (action.type === 'update_memory' && action.key) {
                 await Database.memorySet(action.key, action.value || '');
                 console.log(`[MEMÓRIA] Atualizado: ${action.key}`);
