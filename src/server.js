@@ -428,6 +428,38 @@ app.post('/api/memory/cleanup', securityMiddleware, async (req, res) => {
     }
 });
 
+// HYBRID RAG: Bibliotecário de ingestão (recebe conhecimentos do PC local)
+app.post('/api/alma/ingest_knowledge', async (req, res) => {
+    // Autenticação leve combinada
+    const auth = req.headers.authorization;
+    if (!auth || !auth.includes(process.env.HERMES_API_KEY)) {
+        return res.status(401).json({ error: 'Unauthorized Hybrid Agent' });
+    }
+    
+    try {
+        const { title, content, source } = req.body;
+        if (!title || !content) return res.status(400).json({ error: 'Title and content required' });
+        
+        console.log(`[RAG INGEST] Vetorizando ${title}...`);
+        const { getEmbedding } = require('./vector_search');
+        const embedding = await getEmbedding(content);
+        
+        // Remove anterior se existir para evitar duplicados
+        await dbExecute('DELETE FROM knowledge WHERE source = ?', [source || title]);
+        
+        await dbExecute(
+            'INSERT INTO knowledge (title, content, source, embedding) VALUES (?, ?, ?, ?)', 
+            [title, content, source || 'obsidian', JSON.stringify(embedding)]
+        );
+        
+        console.log(`[RAG INGEST] ✅ Sucesso: ${title} salvo no Turso.`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[RAG INGEST] Erro:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // FIX 5: Endpoint para recarregar logs recentes ao reconectar
 app.get('/api/logs-recent', securityMiddleware, async (req, res) => {
     try {
