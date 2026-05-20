@@ -448,9 +448,34 @@ app.post('/api/alma/ingest_knowledge', async (req, res) => {
         );
         
         console.log(`[RAG INGEST] ✅ Sucesso: ${title} salvo no Turso.`);
+        
+        // Emite para o Dashboard em tempo real
+        if (typeof io !== 'undefined') {
+            io.emit('obsidian_sync', { title, timestamp: new Date().toISOString() });
+            io.emit('new_log', { source: 'OBSIDIAN', message: `Novo conhecimento: ${title}`, timestamp: new Date().toISOString() });
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error('[RAG INGEST] Erro:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/iamobil/stats: Entrega métricas reais para o Dashboard Pulse UI
+app.get('/api/iamobil/stats', async (req, res) => {
+    if (!iamobilClient) return res.status(501).json({ error: 'IAmobil Database not configured' });
+    
+    try {
+        const properties = await iamobilClient.execute('SELECT COUNT(*) as total FROM imoveis');
+        const leads = await iamobilClient.execute('SELECT COUNT(*) as total FROM leads');
+        
+        res.json({
+            properties: properties.rows[0]?.total || 0,
+            leads: leads.rows[0]?.total || 0,
+            timestamp: new Date().toISOString()
+        });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });

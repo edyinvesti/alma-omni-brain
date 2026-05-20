@@ -179,7 +179,7 @@ const tools = [
     { name: 'state_from_uf', description: 'Estado de UF', inputSchema: { type: 'object', properties: { uf: { type: 'string' } }, required: ['uf'] } },
     { name: 'uf_from_state', description: 'UF de Estado', inputSchema: { type: 'object', properties: { state: { type: 'string' } }, required: ['state'] } },
     { name: 'distance_coords', description: 'Distância entre coordenadas', inputSchema: { type: 'object', properties: { lat1: { type: 'number' }, lon1: { type: 'number' }, lat2: { type: 'number' }, lon2: { type: 'number' } }, required: ['lat1', 'lon1', 'lat2', 'lon2'] } },
-    { name: ' Compass direction', description: 'Direção entre coordenadas', inputSchema: { type: 'object', properties: { lat1: { type: 'number' }, lon1: { type: 'number' }, lat2: { type: 'number' }, lon2: { type: 'number' } }, required: ['lat1', 'lon1', 'lat2', 'lon2'] } },
+    { name: 'compass_direction', description: 'Direção entre coordenadas', inputSchema: { type: 'object', properties: { lat1: { type: 'number' }, lon1: { type: 'number' }, lat2: { type: 'number' }, lon2: { type: 'number' } }, required: ['lat1', 'lon1', 'lat2', 'lon2'] } },
     { name: 'format_bytes', description: 'Formata bytes', inputSchema: { type: 'object', properties: { bytes: { type: 'number' } }, required: ['bytes'] } },
     { name: 'parse_bytes', description: 'Converte tamanho', inputSchema: { type: 'object', properties: { value: { type: 'number' }, from: { type: 'string' }, to: { type: 'string' } }, required: ['value', 'from', 'to'] } },
     { name: 'send_whatsapp', description: 'Envia WhatsApp (simulado)', inputSchema: { type: 'object', properties: { message: { type: 'string' }, phone: { type: 'string' } }, required: ['message', 'phone'] } },
@@ -304,7 +304,7 @@ const tools = [
     { name: 'truncate_words', description: 'Limita palavras', inputSchema: { type: 'object', properties: { text: { type: 'string' }, n: { type: 'number' } }, required: ['text', 'n'] } },
     { name: 'extract_sentences', description: 'Extrai frases', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
     { name: 'sentence_count', description: 'Conta frases', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
-    { name: 'title_case', description: ' Título Case', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+    { name: 'title_case', description: 'Título Case', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
     { name: 'swap_case', description: 'Inverte maiúsculas/minúsculas', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
 ];
 

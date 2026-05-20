@@ -52,6 +52,11 @@ function initTelemetryStream() {
             addLog(data.message, data.source, data.timestamp);
         });
 
+        // ✅ NOV0: Feed do Obsidian em tempo real
+        socket.on("obsidian_sync", (data) => {
+            updateObsidianFeed(data.title);
+        });
+
         // Alerta visual quando todos os créditos de IA esgotam
         socket.on("ai_offline", (data) => {
             const banner = document.getElementById('ai-offline-banner');
@@ -101,7 +106,43 @@ async function updateSysInfo() {
         if (uptEl) uptEl.textContent = `UP: ${d.uptime}`;
         if (loadEl) loadEl.textContent = `${d.mem_percent}%`;
         if (loadBarEl) loadBarEl.style.width = `${d.mem_percent}%`;
+        
+        // Atualiza gráfico de carga se existir
+        if (window.loadChartInstance) {
+            window.loadChartInstance.data.datasets[0].data.push(d.mem_percent);
+            if (window.loadChartInstance.data.datasets[0].data.length > 20) window.loadChartInstance.data.datasets[0].data.shift();
+            window.loadChartInstance.update();
+        }
+
+        // ✅ NOV0: Atualiza IAmobil Stats
+        updateIAmobilStats();
+
     } catch(e) { /* servidor offline */ }
+}
+
+async function updateIAmobilStats() {
+    try {
+        const res = await fetch(`${CORE_TELEMETRY_URL}/api/iamobil/stats`);
+        if (!res.ok) return;
+        const d = await res.json();
+        const propEl = document.getElementById('iamobil-properties');
+        const leadEl = document.getElementById('iamobil-leads');
+        if (propEl) propEl.textContent = d.properties;
+        if (leadEl) leadEl.textContent = d.leads;
+    } catch(e) {}
+}
+
+function updateObsidianFeed(title) {
+    const feed = document.getElementById('obsidian-feed');
+    if (!feed) return;
+    const entry = document.createElement('div');
+    entry.className = 'feed-entry';
+    entry.style.borderLeft = '2px solid var(--accent-cyan)';
+    entry.style.paddingLeft = '8px';
+    entry.style.marginBottom = '4px';
+    entry.textContent = `> SYNC: ${title}`;
+    feed.insertBefore(entry, feed.firstChild);
+    if (feed.childNodes.length > 10) feed.removeChild(feed.lastChild);
 }
 
 function addLog(msg, source = "SYSTEM", timestamp = null) {
@@ -238,8 +279,9 @@ async function handleActionBtnClick() {
 // Interatividade de Componentes (Visual + Áudio)
 function setupInteractions() {
     // Widgets HUD
-    const widgets = document.querySelectorAll('.hud-widget');
+    const widgets = document.querySelectorAll('.hud-widget, .glass-card');
     widgets.forEach(widget => {
+        if(widget.tagName === 'BUTTON') return;
         widget.style.cursor = 'pointer';
         widget.addEventListener('click', () => {
             const header = widget.querySelector('.hud-widget-header');
@@ -256,6 +298,20 @@ function setupInteractions() {
         centerTitle.style.cursor = 'pointer';
         centerTitle.addEventListener('click', () => speak("Interface Neural de Quarta Geração ativa, Senhor."));
     }
+}
+
+// ✅ NOV0: Ações rápidas do Dashboard
+async function quickAction(type) {
+    let actionData = {};
+    switch(type) {
+        case 'obsidian': actionData = { type: 'open_app', target: 'obsidian' }; break;
+        case 'clean': actionData = { type: 'clean_system' }; break;
+        case 'work': actionData = { type: 'work_mode' }; break;
+        case 'screenshot': actionData = { type: 'screenshot' }; break;
+    }
+    
+    addLog(`Diretriz rápida: ${type.toUpperCase()}`, "COMANDANTE");
+    await executeSAMAction(actionData);
 }
 
 // Reconhecimento de Voz (Microfone)
@@ -448,7 +504,6 @@ function parseColorToRgba(color, alpha = 0.3) {
     }
     return `rgba(0,255,157,${alpha})`;
 }
-}
 
 function speak(text, shouldRestart = true) {
     if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
@@ -531,6 +586,31 @@ function initCharts() {
 
     // 5. Spark Chart
     createLineChart('sparkChart', '#00e5ff', [5,7,4,8,6,9,7,10]);
+
+    // 6. Neural Load Real-time Chart
+    const loadCtx = document.getElementById('loadChart');
+    if(loadCtx) {
+        window.loadChartInstance = new Chart(loadCtx, {
+            type: 'line',
+            data: {
+                labels: Array(20).fill(''),
+                datasets: [{
+                    data: Array(20).fill(0),
+                    borderColor: '#00e5ff',
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false, min: 0, max: 100 } }
+            }
+        });
+    }
 
     // 6. Q3 Performance Bar Chart
     const barCtx = document.getElementById('barChart');

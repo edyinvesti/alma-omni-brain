@@ -444,6 +444,46 @@ def press_key():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/api/hermes/voice', methods=['POST'])
+def generate_voice():
+    if not verify_api_key(request):
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    try:
+        data = request.json or {}
+        text = data.get('text', '')
+        chat_id = data.get('chat_id', '')
+        
+        if not text or not chat_id:
+            return jsonify({"status": "error", "message": "Text and chat_id required"}), 400
+            
+        temp_wav = os.path.join(os.environ.get('TEMP', '/tmp'), f"alma_hibrido_{int(time.time())}.wav")
+        sanitized = text.replace("'", "''").replace('"', '\"')
+        
+        # Gera o áudio via PowerShell
+        ps_cmd = f"Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('{temp_wav}'); $s.Speak('{sanitized}'); $s.Dispose()"
+        subprocess.run(["powershell", "-Command", ps_cmd], check=True)
+        
+        if os.path.exists(temp_wav):
+            # Envia para o Telegram usando o Token do .env
+            token = os.environ.get('TELEGRAM_BOT_TOKEN')
+            url = f"https://api.telegram.org/bot{token}/sendVoice"
+            
+            with open(temp_wav, 'rb') as voice_file:
+                files = {'voice': voice_file}
+                payload = {'chat_id': chat_id}
+                import requests
+                r = requests.post(url, data=payload, files=files)
+            
+            os.remove(temp_wav)
+            if r.status_code == 200:
+                return jsonify({"status": "success", "message": "Voz enviada do PC local"})
+            else:
+                return jsonify({"status": "error", "message": f"Erro Telegram: {r.text}"}), 500
+        
+        return jsonify({"status": "error", "message": "Falha na geração do arquivo"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/hermes/status', methods=['GET'])
 def status():
     return jsonify({"status": "online", "version": "2.0.0-secure"})

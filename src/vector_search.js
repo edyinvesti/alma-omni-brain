@@ -1,9 +1,4 @@
-const { createClient } = require('@libsql/client');
-
-const client = createClient({
-    url: process.env.TURSO_DATABASE_URL,
-    authToken: process.env.TURSO_AUTH_TOKEN,
-});
+const Database = require('./database');
 
 let pipeline = null;
 
@@ -29,9 +24,10 @@ function cosineSimilarity(vecA, vecB) {
 
 async function searchKnowledge(query, topK = 5) {
     try {
+        await Database.connect();
         const queryEmbedding = await getEmbedding(query);
-        
-        const results = await client.execute({
+
+        const results = await Database.client.execute({
             sql: `SELECT id, source, title, content, embedding FROM knowledge WHERE embedding IS NOT NULL`,
             args: []
         });

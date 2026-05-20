@@ -5,10 +5,10 @@ class ActionQueue extends EventEmitter {
         super();
         this.queue = [];
         this.processing = false;
-        this.concurrency = 2; // Máximo 2 ações simultâneas
+        this.concurrency = 2;
         this.running = 0;
-        
-        // Estatísticas
+        this.maxRetries = 10;
+
         this.stats = {
             processed: 0,
             failed: 0,
@@ -66,26 +66,27 @@ class ActionQueue extends EventEmitter {
 
     async executeJob(job) {
         const startTime = Date.now();
-        
+
         try {
             console.log(`[FILA] Executando: ${job.action.type} (Tentativa ${job.attempts + 1})`);
-            
+
             const result = await this.executeAction(job.action);
-            
+
             this.stats.processed++;
             this.stats.totalTime += Date.now() - startTime;
-            
+
             console.log(`[FILA] ✅ Concluído: ${job.action.type} (${Date.now() - startTime}ms)`);
             job.resolve(result);
-            
+
             this.emit('completed', { job, result });
-            
+
         } catch (error) {
             job.attempts++;
-            
-            if (job.attempts < job.maxAttempts) {
+
+            const totalRetries = this.queue.filter(j => j.attempts > 0).length;
+            if (job.attempts < job.maxAttempts && totalRetries < this.maxRetries) {
                 console.log(`[FILA] ⚠️ Erro, tentando novamente: ${error.message}`);
-                this.queue.unshift(job); // Retry
+                this.queue.unshift(job);
                 setTimeout(() => this.process(), 1000);
             } else {
                 this.stats.failed++;

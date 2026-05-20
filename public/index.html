@@ -2,102 +2,75 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-    <title>A.L.M.A. Command Center</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ALMA | Omni-Brain Command</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" integrity="sha512-hoDEMT8I7x3x42T6Mp3CjE8a5tRUxwjxGX1I+YLXcR1WqNUQcp9GVTjXGV2RXfLyQ8+dIl4+WWO3F8eFD5b9rXg==" crossorigin="anonymous"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="sha512-kcJt摸摸tNWy3bBhMVMZ8mn1Eb+S1sDxNpSHN8DRRjM9D4/U8ThWEO99Qq3S3mQMyA=="
- crossorigin="anonymous"></script>
-    <link rel="manifest" href="manifest.json">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#02060f">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link rel="stylesheet" href="splashscreen/splashscreen.css">
 </head>
 <body>
     <div class="hud-container">
-        <!-- MODULAR CINEMATIC INTRO -->
+        <!-- CINEMATIC INTRO -->
         <div id="splash-container">
-            <div id="splash" title="Clique ou pressione qualquer tecla para pular">
+            <div id="splash">
               <div id="grid"></div>
-              <div id="scanline"></div>
-              <div id="particles"></div>
-              <div id="vignette"></div>
-              <div class="corner-dec tl"></div>
-              <div class="corner-dec tr"></div>
-              <div class="corner-dec bl"></div>
-              <div class="corner-dec br"></div>
               <div id="splash-content">
-                <svg id="logo-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                  <polygon id="hex-glow" points="100,18 172,58 172,142 100,182 28,142 28,58"/>
-                  <polygon id="hex" points="100,18 172,58 172,142 100,182 28,142 28,58"/>
-                  <circle id="circle" cx="100" cy="100" r="45"/>
-                  <g>
-                    <line class="conn-line" x1="100" y1="55"  x2="100" y2="18"/>
-                    <line class="conn-line" x1="139" y1="77"  x2="172" y2="58"/>
-                    <line class="conn-line" x1="139" y1="123" x2="172" y2="142"/>
-                    <line class="conn-line" x1="100" y1="145" x2="100" y2="182"/>
-                    <line class="conn-line" x1="61"  y1="123" x2="28"  y2="142"/>
-                    <line class="conn-line" x1="61"  y1="77"  x2="28"  y2="58"/>
-                  </g>
-                  <g>
-                    <line class="corner" x1="96"  y1="18"  x2="104" y2="18"/>
-                    <line class="corner" x1="96"  y1="182" x2="104" y2="182"/>
-                  </g>
-                  <path id="letter-a" d="M100 68 L80 132 M100 68 L120 132 M86 108 L114 108"/>
-                </svg>
                 <div id="title" class="glitch">A.L.M.A.</div>
-                <div id="subtitle">Advanced Learning &amp; Management Algorithm</div>
-                <div id="tagline">// Iniciando interface neural — 2026</div>
-                <div id="waves">
-                  <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-                  <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
-                </div>
+                <div id="subtitle">Neural Omni-Brain 2026</div>
                 <div id="progress-wrap"><div id="progress-bar"></div></div>
               </div>
-              <div id="skip-hint">[ CLIQUE OU QUALQUER TECLA PARA PULAR ]</div>
             </div>
         </div>
 
         <div class="hud-scanlines"></div>
         <div class="hud-grid"></div>
         
-        <div class="mobile-only-btn" onclick="toggleTerminal()">📟</div>
-
         <header class="hud-header">
             <div class="hud-left-meta">
-                <span class="hud-label">ALMA-MASTER-01</span>
+                <span class="hud-label">ALMA-MASTER-C2</span>
                 <span id="connection-status" class="hud-status-blink">UPCODE: CONNECTED</span>
             </div>
-            <div class="hud-center-title">NEURAL INTERFACE [STARK-GEN-IV]</div>
-            <div id="datetime" class="hud-datetime">LOADING...</div>
+            <div class="hud-center-title">HYBRID COMMAND CENTER [PULSE-v1]</div>
+            <div id="datetime" class="hud-datetime">--:--:--</div>
         </header>
 
         <main class="hud-main">
+            <!-- Left Side: System & IAmobil -->
             <div class="hud-side left">
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">LEAD METRICS / ALMA CORE</div>
+                <div class="glass-card">
+                    <div class="hud-widget-header">IAmobil Intelligence</div>
                     <div class="hud-metric-row">
-                        <span class="val">4.5M</span>
-                        <canvas id="tiktokChart" width="100" height="40"></canvas>
+                        <div class="sub-metric">
+                            <span class="hud-label">PROPERTIES</span>
+                            <span id="iamobil-properties" class="val style-cyan">--</span>
+                        </div>
+                        <div class="sub-metric">
+                            <span class="hud-label">ACTIVE LEADS</span>
+                            <span id="iamobil-leads" class="val style-green">--</span>
+                        </div>
                     </div>
                 </div>
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">SYSTEM LOAD</div>
+                
+                <div class="glass-card">
+                    <div class="hud-widget-header">Neural Load</div>
                     <div class="hud-metric-row">
                         <span id="system-load-val" class="val style-cyan">--</span>
-                        <div class="mini-bar"><div id="system-load-bar" class="fill" style="width: 0%;"></div></div>
+                        <canvas id="loadChart" width="120" height="40"></canvas>
+                    </div>
+                    <div class="mini-bar" style="height: 2px; background: rgba(255,255,255,0.1); margin-top: 10px;">
+                        <div id="system-load-bar" class="fill" style="width: 0%; height: 100%; background: var(--accent-cyan);"></div>
                     </div>
                 </div>
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">NETWORK TRAFFIC</div>
-                    <div class="chart-container micro">
-                        <canvas id="revChart"></canvas>
-                    </div>
+
+                <div class="glass-card">
+                    <div class="hud-widget-header">Network Traffic</div>
+                    <div style="height: 80px;"><canvas id="revChart"></canvas></div>
                 </div>
             </div>
 
+            <!-- Center: The Core -->
             <div class="hud-center">
                 <div class="hologram-rings">
                     <div class="ring ring-outer"></div>
@@ -106,45 +79,44 @@
                     <div class="alma-core-wrapper" onclick="toggleTerminal()">
                         <div class="core-center-glow"></div>
                         <div class="core-visual">
-                             <div class="orbit orbit-1"></div>
-                             <div class="orbit orbit-2"></div>
                              <h1 class="core-text">ALMA</h1>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Right Side: Obsidian & Actions -->
             <div class="hud-side right">
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">FINANCIAL FLOW / Laed</div>
-                    <div id="barChart-container"><canvas id="barChart"></canvas></div>
+                <div class="glass-card">
+                    <div class="hud-widget-header">Knowledge Ingestion (Obsidian)</div>
+                    <div id="obsidian-feed" style="height: 120px; overflow-y: auto; font-size: 11px; font-family: 'Roboto Mono'; color: var(--text-dim);">
+                        <div class="feed-entry">> Aguardando sincronização local...</div>
+                    </div>
                 </div>
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">NEURAL VELOCITY</div>
+
+                <div class="glass-card">
+                    <div class="hud-widget-header">Automation Uplink</div>
+                    <div class="action-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button class="glass-card" style="padding: 8px; font-size: 10px; cursor: pointer;" onclick="quickAction('obsidian')">📂 Obsidian</button>
+                        <button class="glass-card" style="padding: 8px; font-size: 10px; cursor: pointer;" onclick="quickAction('clean')">🧹 Cleaner</button>
+                        <button class="glass-card" style="padding: 8px; font-size: 10px; cursor: pointer;" onclick="quickAction('work')">💻 Work</button>
+                        <button class="glass-card" style="padding: 8px; font-size: 10px; cursor: pointer;" onclick="quickAction('screenshot')">📸 Scrnshot</button>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="hud-widget-header">Neural Velocity</div>
                     <div class="hud-metric-row">
-                        <span class="val style-green">96%</span>
+                        <span class="val style-green">99%</span>
                         <canvas id="sparkChart" width="100" height="40"></canvas>
-                    </div>
-                </div>
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">SOCIAL ENGAGEMENT</div>
-                    <div class="chart-container micro">
-                        <canvas id="instaChart"></canvas>
-                    </div>
-                </div>
-                <div class="hud-widget glass-card">
-                    <div class="hud-widget-header">WHATSAPP GROWTH</div>
-                    <div class="hud-metric-row">
-                        <span class="val style-green">78%</span>
-                        <canvas id="wppChart" width="100" height="40"></canvas>
                     </div>
                 </div>
             </div>
         </main>
 
-        <footer class="hud-footer">
+        <footer class="hud-footer" style="height: 40px; border-top: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font-size: 10px; color: var(--text-dim); background: rgba(5,10,20,0.8);">
             <div class="hud-hint">NEURAL UPLINK ACTIVE // [STARK-OS] READY</div>
-            <div class="hud-stats-row">
+            <div class="hud-stats-row" style="display: flex; gap: 20px;">
                 <span id="stat-mem">MEM: --</span>
                 <span id="stat-cpu">CPU: --</span>
                 <span id="stat-uptime">UP: --</span>
@@ -152,25 +124,26 @@
         </footer>
     </div>
     
-    <div id="terminal-overlay" class="terminal-overlay minimal hidden">
-        <div id="log-history" class="log-history glass-card hidden">
-            <div class="terminal-header">ALMA REGISTRO NEURAL 
-                <button onclick="toggleLogs()" style="float:right; background:transparent; border:none; color:var(--c1); cursor:pointer; font-size: 1.2em;">×</button>
+    <!-- TERMINAL / CHAT OVERLAY -->
+    <div id="terminal-overlay" class="terminal-overlay hidden">
+        <div id="log-history" class="log-history glass-card">
+            <div class="terminal-header" style="padding: 10px; border-bottom: 1px solid var(--border-glass); font-size: 12px; letter-spacing: 2px;">
+                ALMA REGISTRO NEURAL 
+                <button onclick="toggleTerminal()" style="float:right; background:transparent; border:none; color:var(--accent-cyan); cursor:pointer;">×</button>
             </div>
             <div id="log-scroll"></div>
         </div>
         
         <div class="input-zone glass-card">
-            <button class="minimal-toggle" onclick="toggleLogs()" title="Ver Histórico de Logs">📜</button>
-            <input type="text" id="cmd-input" placeholder="Diretrizes..." onkeydown="handleInput(event)" oninput="updateActionBtn()">
-            <button id="input-action-btn" onclick="handleActionBtnClick()">
+            <button class="minimal-toggle" style="background:transparent; border:none; font-size: 20px; cursor:pointer;">📜</button>
+            <input type="text" id="cmd-input" placeholder="Digite uma diretriz neural..." onkeydown="handleInput(event)" oninput="updateActionBtn()">
+            <button id="input-action-btn" onclick="handleActionBtnClick()" style="background:transparent; border:none; font-size: 20px; cursor:pointer;">
                 <span id="action-icon">🎙️</span>
             </button>
-            <button class="close-terminal" onclick="toggleTerminal()" title="Fechar Central">×</button>
         </div>
     </div>
 
     <script src="splashscreen/splashscreen.js"></script>
-    <script src="script.js?v=20260513"></script>
+    <script src="script.js"></script>
 </body>
 </html>

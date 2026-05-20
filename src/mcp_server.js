@@ -162,13 +162,9 @@ class AlmaMCPServer {
         }
 
         try {
-            const { createClient } = require('@libsql/client');
-            const client = createClient({
-                url: process.env.TURSO_DATABASE_URL,
-                authToken: process.env.TURSO_AUTH_TOKEN
-            });
-
-            const result = await client.execute({
+            const Database = require('./database');
+            await Database.connect();
+            const result = await Database.client.execute({
                 sql: `SELECT * FROM ${table} ORDER BY id DESC LIMIT ?`,
                 args: [limit]
             });
@@ -181,13 +177,9 @@ class AlmaMCPServer {
 
     async getMemory(key) {
         try {
-            const { createClient } = require('@libsql/client');
-            const client = createClient({
-                url: process.env.TURSO_DATABASE_URL,
-                authToken: process.env.TURSO_AUTH_TOKEN
-            });
-
-            const result = await client.execute({
+            const Database = require('./database');
+            await Database.connect();
+            const result = await Database.client.execute({
                 sql: 'SELECT * FROM memory WHERE key = ?',
                 args: [key]
             });
@@ -200,13 +192,9 @@ class AlmaMCPServer {
 
     async setMemory(key, value) {
         try {
-            const { createClient } = require('@libsql/client');
-            const client = createClient({
-                url: process.env.TURSO_DATABASE_URL,
-                authToken: process.env.TURSO_AUTH_TOKEN
-            });
-
-            await client.execute({
+            const Database = require('./database');
+            await Database.connect();
+            await Database.client.execute({
                 sql: 'INSERT OR REPLACE INTO memory (key, value) VALUES (?, ?)',
                 args: [key, value]
             });
@@ -304,13 +292,9 @@ class AlmaMCPServer {
 
     async addKnowledge(title, content, source = 'MCP') {
         try {
-            const { createClient } = require('@libsql/client');
-            const client = createClient({
-                url: process.env.TURSO_DATABASE_URL,
-                authToken: process.env.TURSO_AUTH_TOKEN
-            });
-
-            await client.execute({
+            const Database = require('./database');
+            await Database.connect();
+            await Database.client.execute({
                 sql: 'INSERT INTO knowledge (source, title, content) VALUES (?, ?, ?)',
                 args: [source, title, content]
             });
