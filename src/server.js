@@ -885,32 +885,6 @@ async function askAlmaBrain(prompt, context = "") {
 async function sendTelegramVoice(chatId, text) {
     if (!bot || !chatId || !text) return;
 
-    // --- MODO HÍBRIDO (Hermes Local) ---
-    // Sempre tentamos o Hermes primeiro se estiver na nuvem, para economizar créditos de API
-    if (IS_CLOUD) {
-        const hermesBaseUrlVoz = process.env.HERMES_URL;
-        const hermesApiKeyVoz = process.env.HERMES_API_KEY;
-        
-        if (hermesBaseUrlVoz && hermesApiKeyVoz) {
-            console.log(`[TTS CLOUD] Solicitando voz ao Hermes local...`);
-            try {
-                const hRes = await fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${hermesApiKeyVoz}`,
-                        'Bypass-Tunnel-Reminder': 'true'
-                    },
-                    body: JSON.stringify({ text, chat_id: chatId })
-                });
-                const hData = await hRes.json();
-                if (hData.status === 'success') return; // Sucesso!
-            } catch (e) {
-                console.warn("[TTS CLOUD] Hermes Offline ou Erro, tentando fallbacks de API...");
-            }
-        }
-    }
-
     const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
     const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
     const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
@@ -918,9 +892,9 @@ async function sendTelegramVoice(chatId, text) {
     const tempWav = path.join(os.tmpdir(), `alma_voice_${Date.now()}.wav`);
     let audioSent = false;
 
-    // ========== TTS FALLBACK SYSTEM ==========
+    // ========== TTS MULTI-PROVIDER SYSTEM (Priority: ElevenLabs -> Hermes -> others) ==========
 
-    // 1️⃣ ElevenLabs (mais natural)
+    // 1️⃣ ElevenLabs (Premium - High Quality)
     if (ELEVENLABS_KEY && !audioSent) {
         try {
             console.log('[TTS] Tentando ElevenLabs...');
@@ -955,7 +929,32 @@ async function sendTelegramVoice(chatId, text) {
         }
     }
 
-    // 2️⃣ Google Cloud TTS
+    // 2️⃣ MODO HÍBRIDO (Hermes Local - Free)
+    if (!audioSent && IS_CLOUD) {
+        const hermesBaseUrlVoz = process.env.HERMES_URL;
+        const hermesApiKeyVoz = process.env.HERMES_API_KEY;
+        
+        if (hermesBaseUrlVoz && hermesApiKeyVoz) {
+            console.log(`[TTS CLOUD] Solicitando voz ao Hermes local...`);
+            try {
+                const hRes = await fetch(`${hermesBaseUrlVoz}/api/hermes/voice`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${hermesApiKeyVoz}`,
+                        'Bypass-Tunnel-Reminder': 'true'
+                    },
+                    body: JSON.stringify({ text, chat_id: chatId })
+                });
+                const hData = await hRes.json();
+                if (hData.status === 'success') audioSent = true;
+            } catch (e) {
+                console.warn("[TTS CLOUD] Hermes Offline ou Erro, tentando outros fallbacks...");
+            }
+        }
+    }
+
+    // 3️⃣ Google Cloud TTS
     if (GOOGLE_TTS_KEY && !audioSent) {
         try {
             console.log('[TTS] Tentando Google Cloud TTS...');
