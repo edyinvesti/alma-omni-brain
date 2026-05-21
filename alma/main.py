@@ -181,7 +181,7 @@ class AlmaCore:
         """Envia uma imagem para o Telegram via Core API."""
         try:
             import requests
-            url = "http://localhost:3000/api/telegram/send-photo"
+            url = f"{NODE_SERVER}/api/telegram/send-photo"
             headers = {"x-alma-key": os.environ.get("API_SECRET")} if os.environ.get("API_SECRET") else {}
             payload = {"path": os.path.abspath(file_path), "caption": "📸 Screenshot solicitado via Comando de Voz/Texto."}
             r = requests.post(url, json=payload, headers=headers)

@@ -409,7 +409,8 @@ app.post('/api/python-bridge', async (req, res) => {
     if (!event) return res.status(400).json({ error: 'Faltando campo event' });
     console.log(`[PYTHON BRIDGE] Evento recebido: ${event}`, data || '');
     try {
-        await dbExecute('INSERT INTO logs (source, message) VALUES (?, ?)', ['PYTHON', `${event}: ${JSON.stringify(data || {})}`]);
+        const companyId = CompanyManager.getActiveId();
+        await Database.logInteraction('info', `${event}: ${JSON.stringify(data || {})}`, 'PYTHON', companyId);
         io.emit('new_log', { source: 'PYTHON', message: `${event}: ${JSON.stringify(data || {})}`, timestamp: new Date().toISOString() });
         res.json({ success: true });
     } catch (err) {
@@ -420,11 +421,12 @@ app.post('/api/python-bridge', async (req, res) => {
 // FIX 9: Endpoint de limpeza de memória duplicada
 app.post('/api/memory/cleanup', securityMiddleware, async (req, res) => {
     try {
-        // Remove entradas antigas mantendo apenas a mais recente por chave
-        await dbExecute(`DELETE FROM memory WHERE id NOT IN (
-            SELECT MAX(id) FROM memory GROUP BY key
-        )`);
-        const remaining = await dbExecute('SELECT COUNT(*) as total FROM memory');
+        const companyId = CompanyManager.getActiveId();
+        // Remove entradas antigas mantendo apenas a mais recente por chave para a empresa ativa
+        await dbExecute(`DELETE FROM memory WHERE company_id = ? AND id NOT IN (
+            SELECT MAX(id) FROM memory WHERE company_id = ? GROUP BY key
+        )`, [companyId, companyId]);
+        const remaining = await dbExecute('SELECT COUNT(*) as total FROM memory WHERE company_id = ?', [companyId]);
         const total = remaining.rows[0]?.total || 0;
         console.log(`[MEMÓRIA] Cleanup concluído. Entradas únicas: ${total}`);
         res.json({ success: true, unique_keys: total });
