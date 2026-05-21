@@ -26,7 +26,7 @@ class Database {
             try {
                 this.client = createClient({ url, authToken: token });
                 this.connected = true;
-                console.log('[DB] Conectado ao Turso');
+                console.log('[DB] Conectado ao Turso (Multi-Tenant)');
                 await this.initTables();
                 this._connectPromise = null;
                 return this.client;
@@ -40,11 +40,12 @@ class Database {
         return null;
     }
 
-    // ✅ NOV0: Inicializa tabelas
+    // Inicializa tabelas com company_id
     async initTables() {
         const tables = [
             `CREATE TABLE IF NOT EXISTS history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 model TEXT,
@@ -52,12 +53,16 @@ class Database {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`,
             `CREATE TABLE IF NOT EXISTS memory (
-                key TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id TEXT NOT NULL,
+                key TEXT NOT NULL,
                 value TEXT NOT NULL,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(company_id, key)
             )`,
             `CREATE TABLE IF NOT EXISTS knowledge (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
                 source TEXT DEFAULT 'user',
@@ -66,6 +71,7 @@ class Database {
             )`,
             `CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id TEXT NOT NULL,
                 level TEXT DEFAULT 'info',
                 message TEXT NOT NULL,
                 context TEXT,
@@ -73,10 +79,23 @@ class Database {
             )`,
             `CREATE TABLE IF NOT EXISTS actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id TEXT NOT NULL,
                 type TEXT NOT NULL,
                 target TEXT,
                 status TEXT DEFAULT 'pending',
                 result TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+            // Tabela CRM por segurança, caso precisemos criar no connect e não apenas no migrate
+            `CREATE TABLE IF NOT EXISTS crm_leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id TEXT NOT NULL,
+                name TEXT,
+                phone TEXT,
+                email TEXT,
+                source TEXT,
+                status TEXT DEFAULT 'novo',
+                notes TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`
         ];
@@ -90,15 +109,14 @@ class Database {
         }
     }
 
-    // ✅ NOV0: Queries estruturadas
-    async historyAdd(role, content, model = null, tokens = null) {
+    async historyAdd(role, content, companyId, model = null, tokens = null) {
         if (!this.client) await this.connect();
-        if (!this.client) return null;
+        if (!this.client || !companyId) return null;
         
         try {
             const result = await this.client.execute({
-                sql: 'INSERT INTO history (role, content, model, tokens) VALUES (?, ?, ?, ?)',
-                args: [role, content, model, tokens]
+                sql: 'INSERT INTO history (company_id, role, content) VALUES (?, ?, ?)',
+                args: [companyId, role, content]
             });
             return result;
         } catch (e) {
@@ -107,14 +125,14 @@ class Database {
         }
     }
 
-    async historyGet(limit = 20) {
+    async historyGet(limit = 20, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return [];
+        if (!this.client || !companyId) return [];
         
         try {
             const result = await this.client.execute({
-                sql: 'SELECT * FROM history ORDER BY id DESC LIMIT ?',
-                args: [limit]
+                sql: 'SELECT * FROM history WHERE company_id = ? ORDER BY id DESC LIMIT ?',
+                args: [companyId, limit]
             });
             return result.rows || [];
         } catch (e) {
@@ -123,14 +141,15 @@ class Database {
         }
     }
 
-    async memorySet(key, value) {
+    async memorySet(key, value, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return null;
+        if (!this.client || !companyId) return null;
         
         try {
+            // Usa INSERT OR REPLACE mas checa a constraint UNIQUE(company_id, key)
             await this.client.execute({
-                sql: 'INSERT OR REPLACE INTO memory (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
-                args: [key, value]
+                sql: 'INSERT INTO memory (company_id, key, value, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(company_id, key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP',
+                args: [companyId, key, value]
             });
             return true;
         } catch (e) {
@@ -139,14 +158,14 @@ class Database {
         }
     }
 
-    async memoryGet(key) {
+    async memoryGet(key, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return null;
+        if (!this.client || !companyId) return null;
         
         try {
             const result = await this.client.execute({
-                sql: 'SELECT * FROM memory WHERE key = ?',
-                args: [key]
+                sql: 'SELECT * FROM memory WHERE company_id = ? AND key = ?',
+                args: [companyId, key]
             });
             return result.rows?.[0]?.value || null;
         } catch (e) {
@@ -155,14 +174,14 @@ class Database {
         }
     }
 
-    async knowledgeAdd(title, content, source = 'user') {
+    async knowledgeAdd(source = 'user', title, content, embedding = null, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return null;
+        if (!this.client || !companyId) return null;
         
         try {
             const result = await this.client.execute({
-                sql: 'INSERT INTO knowledge (title, content, source) VALUES (?, ?, ?)',
-                args: [title, content, source]
+                sql: 'INSERT INTO knowledge (company_id, title, content, source, embedding) VALUES (?, ?, ?, ?, ?)',
+                args: [companyId, title, content, source, embedding]
             });
             return result;
         } catch (e) {
@@ -171,14 +190,14 @@ class Database {
         }
     }
 
-    async knowledgeSearch(query, limit = 5) {
+    async knowledgeSearch(query, limit = 5, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return [];
+        if (!this.client || !companyId) return [];
         
         try {
             const result = await this.client.execute({
-                sql: `SELECT * FROM knowledge WHERE title LIKE ? OR content LIKE ? LIMIT ?`,
-                args: [`%${query}%`, `%${query}%`, limit]
+                sql: `SELECT * FROM knowledge WHERE company_id = ? AND (title LIKE ? OR content LIKE ?) LIMIT ?`,
+                args: [companyId, `%${query}%`, `%${query}%`, limit]
             });
             return result.rows || [];
         } catch (e) {
@@ -187,35 +206,34 @@ class Database {
         }
     }
 
-    async log(level, message, context = null) {
+    async logInteraction(level, message, context = null, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return;
+        if (!this.client || !companyId) return;
         
         try {
             await this.client.execute({
-                sql: 'INSERT INTO logs (level, message, context) VALUES (?, ?, ?)',
-                args: [level, message, context]
+                sql: 'INSERT INTO logs (company_id, level, message, context) VALUES (?, ?, ?, ?)',
+                args: [companyId, level, message, context]
             });
         } catch (e) {
             console.warn('[DB] Erro:', e.message);
         }
     }
 
-    async actionLog(type, target, status = 'pending', result = null) {
+    async actionLog(type, target, status = 'pending', result = null, companyId) {
         if (!this.client) await this.connect();
-        if (!this.client) return;
+        if (!this.client || !companyId) return;
         
         try {
             await this.client.execute({
-                sql: 'INSERT INTO actions (type, target, status, result) VALUES (?, ?, ?, ?)',
-                args: [type, target, status, result]
+                sql: 'INSERT INTO actions (company_id, type, target, status, result) VALUES (?, ?, ?, ?, ?)',
+                args: [companyId, type, target, status, result]
             });
         } catch (e) {
             console.warn('[DB] Erro:', e.message);
         }
     }
 
-    // ✅ NOV0: Conexão de backup
     async reconnect() {
         this.connected = false;
         this.client = null;

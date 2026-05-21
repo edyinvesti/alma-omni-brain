@@ -12,6 +12,15 @@ const { exec, execSync } = require('child_process');
 const { createClient } = require('@libsql/client');
 const FormData = require('form-data');
 
+let companies = {};
+try {
+    companies = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'companies.json')));
+    console.log('[ALMA] Multi-Tenant manifest loaded: ' + Object.keys(companies).length + ' companies.');
+} catch (e) {
+    console.log('[ALMA] companies.json not found or invalid.');
+}
+let currentCompanyId = 'iamobil'; // Default tenant
+
 const ALLOWED_DIRS = [os.homedir(), process.env.USERPROFILE || 'C:\\Users\\User'];
 const rateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60000;
@@ -144,6 +153,8 @@ const iamobilClient = (process.env.IAMOBIL_DB_URL && process.env.IAMOBIL_DB_TOKE
 const ActionQueue = require('./action_queue');
 const ActionParser = require('./action_parser');
 const AppFinder = require('./app_finder');
+const CompanyManager = require('./company_manager');
+const rootPath = path.resolve(__dirname, '..');
 
 // Chave Groq para Whisper e Chat
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || process.env.GROQ_KEY || "").trim();
@@ -188,10 +199,8 @@ if (!botToken || !adminChatId) {
 
     // Comando /ajuda
     bot.command("ajuda", async (ctx) => {
-        await ctx.reply(`🦾 *A.L.M.A. - Central de Comando Remoto*\n\nExemplos de comandos:\n\n🔍 *Pesquisar:* \`pesquise sobre bitcoin\`\n💻 *Abrir app:* \`abra o chrome\`\n📊 *Sistema:* \`/status\``, { parse_mode: "Markdown" });
+        await ctx.reply(`🦾 *A.L.M.A. - Central de Comando Remoto*\n\nExemplos de comandos:\n\n🔍 *Pesquisar:* \`pesquise sobre bitcoin\`\n💻 *Abrir app:* \`abra o chrome\`\n📊 *Sistema:* \`/status\`\n🏛️ *Empresa Atual:* \`/empresa\`\n🔄 *Trocar Empresa:* \`/mudar_empresa [id]\``, { parse_mode: "Markdown" });
     });
-
-
 
     console.log('[TELEGRAM] Bot C2 Inicializado, aguardando comandos.');
 
@@ -266,7 +275,8 @@ const securityMiddleware = (req, res, next) => {
     if (incomingSecret !== API_SECRET) {
         console.warn(`[SENTINEL] Tentativa de acesso não autorizado! IP: ${ip} para ${req.path}`);
 
-        dbExecute('INSERT INTO logs (source, message) VALUES (?, ?)', ['SENTINEL', `ALERTA: Tentativa de acesso não autorizado no endpoint ${req.path} vindo do IP ${ip}`])
+        const companyId = CompanyManager.getActiveId();
+        Database.logInteraction('security', `ALERTA: Tentativa de acesso não autorizado no endpoint ${req.path} vindo do IP ${ip}`, 'SENTINEL', companyId)
             .catch(err => console.error("Falha ao salvar log de segurança", err));
 
         if (bot && adminChatId) {
@@ -595,12 +605,12 @@ app.post('/api/telemetry', securityMiddleware, async (req, res) => {
     if (!source || !message) return res.status(400).json({ error: 'Faltando "source" ou "message"' });
 
     try {
-        const result = await dbExecute('INSERT INTO logs (source, message) VALUES (?, ?)', [source, message]);
-        const lastID = result.lastInsertRowid || result.insertId;
+        const companyId = CompanyManager.getActiveId();
+        await Database.logInteraction('info', message, source, companyId);
         const timestamp = new Date().toISOString();
         
         // Dispara o evento via WebSockets para o dashboard
-        io.emit('new_log', { id: lastID, source, message, timestamp });
+        io.emit('new_log', { source, message, timestamp });
         
         // Dispara notificação via Telegram se configurado
         if (bot && adminChatId && !adminChatId.includes("insira_seu_chat_id")) {
@@ -608,7 +618,7 @@ app.post('/api/telemetry', securityMiddleware, async (req, res) => {
         }
         
         console.log(`[LOG] Novo evento registrado: ${source} - ${message}`);
-        res.json({ success: true, id: lastID });
+        res.json({ success: true });
     } catch (err) {
         console.error("[ERRO DB] Falha na telemetria:", err);
         res.status(500).json({ error: err.message });
@@ -620,8 +630,9 @@ const { searchKnowledge } = require('./vector_search');
 // --- HELPER PARA RECUPERAR CONTEXTO OMNI ---
 async function getOmniContext(query = "") {
     try {
-        const facts = await dbExecute('SELECT key, value FROM memory ORDER BY timestamp DESC');
-        const history = await dbExecute('SELECT role, content FROM history ORDER BY id DESC LIMIT 20');
+        const companyId = CompanyManager.getActiveId();
+        const facts = await dbExecute('SELECT key, value FROM memory WHERE company_id = ? ORDER BY updated_at DESC', [companyId]);
+        const history = await dbExecute('SELECT role, content FROM history WHERE company_id = ? ORDER BY id DESC LIMIT 20', [companyId]);
         
         let context = "=== MEMÓRIA E FATOS ===\n";
         facts.rows.forEach(f => context += `${f.key}: ${f.value}\n`);
@@ -829,14 +840,19 @@ async function askAlmaBrain(prompt, context = "") {
     const dataAtual = agora.toLocaleDateString('pt-BR', optsData);
     const horaAtual = agora.toLocaleTimeString('pt-BR', optsHora);
 
+    const companyCfg = CompanyManager.getActiveConfig();
+    const companyId = CompanyManager.getActiveId();
+    
     const sys_prompt = `Você é o ALMA (ALMA CORE). Um assistente de IA potente, leal e EXTREMAMENTE DIRETO.
     
     🕐 DATA E HORA ATUAL (Brasília, UTC-3): ${dataAtual}, ${horaAtual} BRT
     
-    🏙️ NÚCLEO DE GESTÃO (20 EMPRESAS):
-    1. Sua missão agora inclui a gestão e aprendizado de 20 empresas.
-    2. Sempre que o Comandante mencionar uma empresa, verifique a memória para associar fatos, metas e leads a ela.
-    3. Se aprender algo novo sobre uma empresa, salve usando chaves como: "empresa_[nome]_[fato]".
+    🏢 CONTEXTO DE EMPRESA (BLOCO NOVO ATUAL):
+    ID: ${companyId}
+    Nome da Operação: ${companyCfg.name || 'Desconhecida'}
+    Setor: ${companyCfg.sector || 'N/A'}
+    Sua Persona Exigida: ${companyCfg.persona || 'Assistente profissional padrão, sem persona definida.'}
+    Você deve ATUAR E RESPONDER EXATAMENTE de acordo com sua "Persona Exigida". NUNCA saia deste personagem.
     
     REGRAS DE OURO (MUITO IMPORTANTE):
     1. Seja CURTO e DIRETO. Máximo de 2 frases.
@@ -862,7 +878,8 @@ async function askAlmaBrain(prompt, context = "") {
         { role: "user", content: `Instrução: ${prompt}` }
     ];
 
-    await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['Comandante', prompt]);
+    const CompanyDatabase = require('./company_database');
+    await CompanyDatabase.historyAdd('Comandante', prompt);
 
     // Tenta cada modelo em sequência (fallback automático)
     for (let i = currentModelIndex; i < GROQ_MODELS.length; i++) {
@@ -877,7 +894,7 @@ async function askAlmaBrain(prompt, context = "") {
                 io.emit('new_log', { source: 'SISTEMA', message: `🔄 IA mudou para modelo: ${model}`, timestamp: new Date().toISOString() });
             }
 
-            await dbExecute('INSERT INTO history (role, content) VALUES (?, ?)', ['ALMA', response]);
+            await CompanyDatabase.historyAdd('ALMA', response);
             await handleMemoryActions(response);
             brainCache.set(cacheKey, { response, timestamp: Date.now() });
             return response;
@@ -985,7 +1002,11 @@ async function askAlmaBrain(prompt, context = "") {
 }
 
 async function sendTelegramVoice(chatId, text) {
-    if (!bot || !chatId || !text) return;
+    console.log(`[DEBUG] sendTelegramVoice called -> bot: ${!!bot}, chatId: ${chatId}, textLength: ${text ? text.length : 0}`);
+    if (!bot || !chatId || !text) {
+        console.log(`[DEBUG] Abortando sendTelegramVoice: falha em validação inicial`);
+        return;
+    }
 
     const ELEVENLABS_KEY = process.env.ELEVENLABS_API_KEY;
     const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
@@ -1238,6 +1259,17 @@ if (bot) {
     // TELEGRAM REMOTE COMMAND CENTER (C2 FULL CONTROL)
     // =====================================================
 
+    bot.command("mudar_empresa", async (ctx) => {
+        const target = ctx.message.text.split(' ')[1];
+        if (!target || !companies[target]) {
+            return ctx.reply(`🏢 *Empresas Disponíveis:*\n${Object.keys(companies).map(k => `• ${k} (${companies[k].name})`).join('\n')}\n\nUso: /mudar_empresa [id_empresa]`, { parse_mode: 'Markdown' });
+        }
+        currentCompanyId = target;
+        const comp = companies[target];
+        await ctx.reply(`🔄 Contexto alterado para: *${comp.name}*.\nAgora o ALMA responderá como esta empresa.`, { parse_mode: 'Markdown' });
+        console.log(`[ALMA] Contexto mudou para: ${target}`);
+    });
+
     bot.command("leads", async (ctx) => {
         try {
             const row = await dbGet("SELECT COUNT(*) as total FROM logs WHERE message LIKE '%lead%'");
@@ -1259,43 +1291,102 @@ if (bot) {
         }
     });
 
-    // === RESPONDER MENSAGENS NORMAIS (NÃO COMANDOS) ===
-    bot.on('message:text', async (ctx) => {
-        const msg = ctx.message;
-        
-        // Ignora comandos
-        if (msg.text && msg.text.startsWith('/')) return;
-        
-        // Verifica se é admin
-        if (String(msg.chat.id) !== String(adminChatId)) {
-            console.log(`[TELEGRAM] Bloqueado: ID ${msg.chat.id} não é admin`);
-            return;
-        }
-
-        const text = msg.text.trim();
-        console.log(`[TELEGRAM] Mensagem normal: "${text}"`);
-
+    // === COMANDOS INSTAGRAM ===
+    bot.command("instagram", async (ctx) => {
         try {
-            // Carrega contexto
-            const context = await getOmniContext(text);
+            const comp = companies[currentCompanyId];
+            await ctx.reply(`📱 Verificando Instagram: ${comp ? comp.name : currentCompanyId}...`);
             
-            // Pergunta para a IA
-            const response = await askAlmaBrain(text, context);
+            const { spawn } = require('child_process');
+            const path = require('path');
             
-            // Limpa ações da resposta
-            const cleanedResponse = response.replace(/\[\[ACTION:[^\]]+\]\]/g, '').trim();
+            const pythonScript = path.join(__dirname, '..', 'automation', 'instagram_monitor.py');
             
-            // Responde no Telegram (Texto + Voz)
-            await ctx.reply(cleanedResponse || "Entendido!");
-            if (cleanedResponse) {
-                await sendTelegramVoice(ctx.chat.id, cleanedResponse);
-            }
+            const proc = spawn('python', [pythonScript, 'check', currentCompanyId], { 
+                cwd: path.join(__dirname, '..'),
+                timeout: 15000 
+            });
+            
+            let output = '';
+            proc.stdout.on('data', (data) => { output += data.toString(); });
+            proc.stderr.on('data', (data) => { console.error('[IG]', data.toString()); });
+            
+            proc.on('close', (code) => {
+                if (output) {
+                    ctx.reply(output.trim(), { parse_mode: 'Markdown' }).catch(e => ctx.reply(output.trim()));
+                } else {
+                    ctx.reply("❌ Erro ao acessar Instagram. Verifique se INSTAGRAM_ACCESS_TOKEN está no .env");
+                }
+            });
             
         } catch (err) {
-            console.error("[TELEGRAM] Erro ao processar mensagem:", err.message);
-            await ctx.reply("Desculpe, tive um erro ao processar sua mensagem.");
+            console.error("[INSTAGRAM CMD] Erro:", err.message);
+            await ctx.reply("❌ Erro ao acessar Instagram");
         }
     });
+
+    bot.command("ig_generate", async (ctx) => {
+        const args = ctx.message.text.split(' ').slice(1).join(' ');
+        if (!args) {
+            return ctx.reply("📝 Use: /ig_generate [tema do post]\n\nExemplo: /ig_generate apartamento 2 quartos sp");
+        }
+        
+        try {
+            const { spawn } = require('child_process');
+            const path = require('path');
+            
+            const pythonScript = path.join(__dirname, '..', 'automation', 'instagram_monitor.py');
+            
+            const proc = spawn('python', [pythonScript, 'generate', currentCompanyId, args], { 
+                cwd: path.join(__dirname, '..'),
+                timeout: 30000 
+            });
+            
+            let output = '';
+            proc.stdout.on('data', (data) => { output += data.toString(); });
+            
+            proc.on('close', async (code) => {
+                const caption = await askAlmaBrain(
+                    `Gere uma legenda para Instagram de ${companies[currentCompanyId]?.name || 'nossa empresa'} sobre: ${args}. 
+                    Inclua hashtags relevantes. Máximo 2000 caracteres. Use emojis.`
+                );
+                ctx.reply(`📝 *Legenda Gerada:*\n\n${caption}`, { parse_mode: 'Markdown' });
+            });
+            
+        } catch (err) {
+            console.error("[IG GENERATE] Erro:", err.message);
+            await ctx.reply("❌ Erro ao gerar legenda");
+        }
+    });
+
+    bot.command("ig_stats", async (ctx) => {
+        await ctx.reply("📊 Buscando estatísticas do Instagram...");
+        
+        try {
+            const { spawn } = require('child_process');
+            const path = require('path');
+            
+            const pythonScript = path.join(__dirname, '..', 'automation', 'instagram_monitor.py');
+            
+            const proc = spawn('python', [pythonScript, 'metrics', currentCompanyId], { 
+                cwd: path.join(__dirname, '..'),
+                timeout: 15000 
+            });
+            
+            let output = '';
+            proc.stdout.on('data', (data) => { output += data.toString(); });
+            
+            proc.on('close', (code) => {
+                ctx.reply(output.trim() || "❌ Erro ao buscar métricas", { parse_mode: 'Markdown' });
+            });
+            
+        } catch (err) {
+            console.error("[IG STATS] Erro:", err.message);
+            await ctx.reply("❌ Erro ao buscar estatísticas");
+        }
+    });
+
+    // O bloco obsoleto do responder mensagens normais foi removido para evitar colisão com o bloco mestre abaixo.
 
     bot.command("empresa", async (ctx) => {
         try {
@@ -1392,11 +1483,19 @@ if (bot) {
         let hermesEndpoint = null;
         let hermesPayload = {};
 
+        // Função para testar se é um comando (só se palavra-chave exata estiver no INICIO da frase)
+        const isCommand = (keywords) => {
+            const regex = new RegExp(`^(alma\\s+)?(por favor\\s+)?(${keywords.join('|')})\\b`, 'i');
+            const match = text.match(regex);
+            return match ? match[3].toLowerCase() : null; // retorna a keyword que ativou
+        };
+
         // --- Detectar PESQUISA ---
         const searchKeywords = ['pesquise', 'busque', 'procure', 'search', 'pesquisar', 'buscar'];
-        const foundSearch = searchKeywords.find(k => text.includes(k));
+        const foundSearch = isCommand(searchKeywords);
         if (foundSearch) {
-            target = text.replace(foundSearch, '').replace(/\s*(sobre|por|na internet|no google)\s*/gi, '').trim();
+            // Remove tudo até a keyword
+            target = text.substring(text.indexOf(foundSearch) + foundSearch.length).replace(/^(sobre|por|na internet|no google)/i, '').trim();
             if (target) {
                 command = `start chrome "https://www.google.com/search?q=${encodeURIComponent(target)}"`;
                 action = 'search';
@@ -1406,7 +1505,7 @@ if (bot) {
         // --- Detectar ABRIR APLICATIVO ---
         if (!command) {
             const openKeywords = ['abra', 'abrir', 'abre', 'open'];
-            const foundOpen = openKeywords.find(k => text.includes(k));
+            const foundOpen = isCommand(openKeywords);
             if (foundOpen) {
                 const apps = {
                     'chrome': 'Start-Process chrome', 'google': 'Start-Process chrome',
@@ -1556,7 +1655,7 @@ const hermesBaseUrl = process.env.HERMES_URL;
             action = 'athena_research'; command = `python ${pythonPath}/web_agent/agent.py --query "${query}"`; target = `Pesquisa Profunda Athena: ${query}`;
         } else if (cmd.includes('segundo cerebro') || cmd.includes('obsidian')) {
             console.log("[COMANDO] Segundo cerebro detectado - enviando para Hermes");
-            const vaultPath = "C:\\Users\\User\\Downloads\\alma";
+            const vaultPath = "C:\\Users\\User\\Downloads\\jarvis.html";
             action = 'open'; target = 'Obsidian';
             hermesEndpoint = '/api/hermes/obsidian';
             hermesPayload = {vault: vaultPath};
@@ -1569,16 +1668,21 @@ const hermesBaseUrl = process.env.HERMES_URL;
 
         if (!command) {
             const searchKeywords = ['pesquise', 'busque', 'procure', 'search', 'pesquisar', 'buscar'];
-            const foundSearch = searchKeywords.find(k => cmd.includes(k));
+            // Só ativa se a palavra estiver no INÍCIO do comando (não no meio de uma frase)
+            const isSearchCmd = new RegExp(`^(alma\\s+)?(por favor\\s+)?(${searchKeywords.join('|')})\\b`, 'i');
+            const foundSearch = cmd.match(isSearchCmd);
             if (foundSearch) {
-                target = cmd.replace(foundSearch, '').replace(/\s*(sobre|por|na internet|no google)\s*/gi, '').trim();
+                const keyword = foundSearch[3];
+                target = cmd.substring(cmd.indexOf(keyword) + keyword.length).replace(/^\s*(sobre|por|na internet|no google)/i, '').trim();
                 if (target) { command = `start chrome "https://www.google.com/search?q=${encodeURIComponent(target)}"`; action = 'search'; }
             }
         }
 
         if (!command) {
             const openKeywords = ['abra', 'abrir', 'abre', 'open'];
-            const foundOpen = openKeywords.find(k => cmd.includes(k));
+            // Só ativa se a palavra estiver no INÍCIO do comando
+            const isOpenCmd = new RegExp(`^(alma\\s+)?(por favor\\s+)?(${openKeywords.join('|')})\\b`, 'i');
+            const foundOpen = cmd.match(isOpenCmd);
             if (foundOpen) {
                 const apps = {
                     'chrome': 'Start-Process chrome', 'google': 'Start-Process chrome',
@@ -1602,7 +1706,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
                     'whatsapp': 'Start-Process "https://web.whatsapp.com"',
                     'chatgpt': 'Start-Process "https://chat.openai.com"',
                 };
-                let appName = cmd.replace(foundOpen, '').replace(/\b(o|a|os|as|app|meu|minha)\b/gi, '').trim();
+                const keyword = foundOpen[3];
+                let appName = cmd.substring(cmd.indexOf(keyword) + keyword.length).replace(/\b(o|a|os|as|app|meu|minha)\b/gi, '').trim();
                 appName = appName.replace(/\.$/, '');
 
                 if (apps[appName]) {
@@ -1615,12 +1720,8 @@ const hermesBaseUrl = process.env.HERMES_URL;
                     }
                     target = appName;
                     action = 'open';
-                } else {
-                    // Fallback para pesquisa
-                    command = `start chrome "https://www.google.com/search?q=${encodeURIComponent(appName)}"`;
-                    target = appName;
-                    action = 'search';
                 }
+                // Se não encontrou app, NÃO faz fallback para Google - passa para a IA responder
             }
         }
 

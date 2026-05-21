@@ -1,4 +1,5 @@
 const Database = require('./database');
+const CompanyManager = require('./company_manager');
 
 let pipeline = null;
 
@@ -26,10 +27,11 @@ async function searchKnowledge(query, topK = 5) {
     try {
         await Database.connect();
         const queryEmbedding = await getEmbedding(query);
+        const companyId = CompanyManager.getActiveId();
 
         const results = await Database.client.execute({
-            sql: `SELECT id, source, title, content, embedding FROM knowledge WHERE embedding IS NOT NULL`,
-            args: []
+            sql: `SELECT id, source, title, content, embedding FROM knowledge WHERE company_id = ? AND embedding IS NOT NULL`,
+            args: [companyId]
         });
         
         if (!results.rows || results.rows.length === 0) {
